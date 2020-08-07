@@ -219,7 +219,7 @@ local on_gui_checked_state_changed = function(event)
             playermeta.settings.add_tasks = state
 
             if playermeta.frame then
-                playermeta.clear()
+                playermeta:clear()
                 playermeta:gui()
             end
         elseif number == "06" then
@@ -228,7 +228,7 @@ local on_gui_checked_state_changed = function(event)
             playermeta.settings.delete_assigned_players = state
 
             if playermeta.frame then
-                playermeta.clear()
+                playermeta:clear()
                 playermeta:gui()
             end
         elseif number == "07" then
@@ -237,7 +237,7 @@ local on_gui_checked_state_changed = function(event)
             playermeta.settings.assign_players = state
 
             if playermeta.frame then
-                playermeta.clear()
+                playermeta:clear()
                 playermeta:gui()
             end
         elseif number == "08" then
@@ -246,7 +246,7 @@ local on_gui_checked_state_changed = function(event)
             playermeta.settings.sort_tasks = state
 
             if playermeta.frame then
-                playermeta.clear()
+                playermeta:clear()
                 playermeta:gui()
             end
         elseif number == "09" then
@@ -255,7 +255,7 @@ local on_gui_checked_state_changed = function(event)
             playermeta.settings.set_location = state
 
             if playermeta.frame then
-                playermeta.clear()
+                playermeta:clear()
                 playermeta:gui()
             end
         elseif number == "10" then
@@ -264,7 +264,7 @@ local on_gui_checked_state_changed = function(event)
             playermeta.settings.edit_tasks = state
 
             if playermeta.frame then
-                playermeta.clear()
+                playermeta:clear()
                 playermeta:gui()
             end
         elseif number == "11" then
@@ -273,7 +273,7 @@ local on_gui_checked_state_changed = function(event)
             playermeta.settings.delete_tasks = state
 
             if playermeta.frame then
-                playermeta.clear()
+                playermeta:clear()
                 playermeta:gui()
             end
         elseif number == "12" then
@@ -282,7 +282,7 @@ local on_gui_checked_state_changed = function(event)
             playermeta.settings.add_subtasks = state
 
             if playermeta.frame then
-                playermeta.clear()
+                playermeta:clear()
                 playermeta:gui()
             end
         end
