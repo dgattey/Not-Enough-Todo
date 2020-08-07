@@ -1,0 +1,10 @@
+{
+	"name": "Not_Enough_Todo",
+	"version": "0.0.1",
+	"title": "Not Enough Todo - NET",
+	"author": "LuziferSenpai",
+	"contact": "mods@luzifersenpai.de",
+	"description": "This is a new and improved todo-list mod. Which has the newest gui and many features.",
+	"dependencies": ["base"],
+	"factorio_version": "0.18"
+}
