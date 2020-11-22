@@ -4,851 +4,1028 @@ require "mod-gui"
 local player_lib = require "scripts/player"
 local definesevents = defines.events
 local definesbutton = defines.mouse_button_type
-local table_deepcopy = util.table.deepcopy
 
 local script_data = {
-    index = 1,
     players = {},
+    player_table = {},
+    player_lookup = {},
+    index = 1,
     todo = {},
     finished_todo = {},
     all_todo = {},
-    unfinished_todo = {},
-    player_table = {},
-    player_lookup = {}
+    unfinished_todo = {}
 }
 
-local build_scrollpane_1 = function(switch_state)
-    for _, playermeta in pairs(script_data.players) do
-        if playermeta.frame and playermeta.switch_state == switch_state then
-            playermeta:build_scrollpane()
+local function remove_last(str)
+    return (string.gsub(str, ",?[%w_]+%s*=%s*[%w_]+$", ""))
+end
 
-            if playermeta.edit_frame then
-                playermeta:clear_edit()
+local function update_player_flow(force, assigned, namestring)
+    local player_table = script_data.player_table[force]
+
+    for _, player_id in pairs(script_data.player_lookup[force]) do
+        local playermeta = script_data.players[player_id]
+
+        if playermeta.frame and playermeta.players[namestring] then
+            playermeta:add_assigned_data(assigned, playermeta.players[namestring], player_table, namestring)
+        end
+    end
+end
+
+local function update_subtask_flow(force, subtasks, parentnamestring)
+    local todo = script_data.todo[force]
+    local player_table = script_data.player_table[force]
+
+    for _, player_id in pairs(script_data.player_lookup[force]) do
+        local playermeta = script_data.players[player_id]
+
+        if playermeta.frame and playermeta.subtaskflows[parentnamestring] then
+            playermeta.toggles[parentnamestring].number = #subtasks
+            playermeta:add_subtasks(subtasks, todo, player_table, parentnamestring)
+        end
+    end
+end
+
+local function update_scrollpane(force, all)
+    for _, player_id in pairs(script_data.player_lookup[force]) do
+        local playermeta = script_data.players[player_id]
+
+        if playermeta.frame and (all == "all" or (playermeta.switch_state == "left" and (all == "left-right" or all == "none-left" or all == "left")) or (playermeta.switch_state == "none" and (all == "none-right" or all == "none-left" or all == "none")) or playermeta.switch_state == "right" and (all == "left-right" or all == "none-right" or all == "right")) then
+            playermeta:build_scrollpane(script_data)
+            playermeta.button.number = #script_data.unfinished_todo[force]
+        end
+    end
+end
+
+local function update_checkboxes(force, state, namestring)
+    for _, player_id in pairs(script_data.player_lookup[force]) do
+        local playermeta = script_data.players[player_id]
+
+        if playermeta.frame and playermeta.checkboxes[namestring] then
+            playermeta.checkboxes[namestring].state = state
+
+            if playermeta.reference_checkboxes[namestring] then
+                playermeta.reference_checkboxes[namestring].state = state
             end
         end
     end
 end
 
-local build_scrollpane_2 = function(switch_state)
-    for _, playermeta in pairs(script_data.players) do
-        if playermeta.frame and (playermeta.switch_state == "none" or playermeta.switch_state == switch_state) then
-            playermeta:build_scrollpane()
+local function check_texts(force, playermeta)
+    local todo = script_data.todo[force]
+    local player_lookup = script_data.player_lookup[force]
+    local enddata = {}
+    local length = 0
 
-            if playermeta.edit_frame then
-                playermeta:clear_edit()
+    for namestring, title in pairs(playermeta.titles) do
+        local description = playermeta.descriptions[namestring]
+
+        playermeta.edit_titles[namestring] = nil
+        playermeta.edit_descriptions[namestring] = nil
+
+        if title.style.font == "default-bold" or description.style.font == "default-bold" then
+            local data = todo[namestring]
+            data.title = title.text
+            data.description = description.text
+
+            enddata[namestring] = {title = title.text, description = description.text}
+            length = length + 1
+        end
+    end
+
+    if length > 0 then
+        for _, player_id in pairs(player_lookup) do
+            local secondplayermeta = script_data.players[player_id]
+
+            if secondplayermeta.frame or next(secondplayermeta.reference_titles) then
+                for namestring, data in pairs(enddata) do
+                    if secondplayermeta.frame and secondplayermeta.titles[namestring] then
+                        if secondplayermeta.edit_mode then
+                            secondplayermeta.titles[namestring].text = data.title
+                            secondplayermeta.descriptions[namestring].text = data.description
+                        else
+                            secondplayermeta.titles[namestring].caption = data.title
+                            secondplayermeta.descriptions[namestring].caption = data.description
+                        end
+                    end
+
+                    if secondplayermeta.reference_titles[namestring] then
+                        secondplayermeta.reference_titles[namestring].caption = data.title
+                        secondplayermeta.reference_descriptions[namestring].caption = data.description
+                    end
+                end
             end
         end
     end
 end
 
-local build_scrollpane_3 = function()
-    for _, playermeta in pairs(script_data.players) do
-        if playermeta.frame and (playermeta.switch_state == "left" or playermeta.switch_state == "right") then
-            playermeta:build_scrollpane()
+local function update_references(force, id_string)
+    local todo = script_data.todo[force]
 
-            if playermeta.edit_frame then
-                playermeta:clear_edit()
-            end
+    for _, player_id in pairs(script_data.player_lookup[force]) do
+        local playermeta = script_data.players[player_id]
+        local namestring = playermeta.reference_namestrings[id_string]
+
+        if namestring then
+            playermeta:reference_internal(todo[namestring], todo, namestring)
         end
     end
 end
 
-local build_reference = function(id)
-    for _, playermeta in pairs(script_data.players) do
-        local reference_frame = playermeta.reference_frames[id]
+local remove_data = {}
+local import_subtasks = {}
 
-        if reference_frame then
-            playermeta:reference_subtasks_gui(id)
+remove_data = function(force, todo, parentnamestring)
+    for _, player_id in pairs(script_data.player_lookup[force]) do
+        local playermeta = script_data.players[player_id]
+
+        playermeta.sub_open[parentnamestring] = nil
+
+        if playermeta.frame then
+            playermeta.checkboxes[parentnamestring] = nil
+            playermeta.titles[parentnamestring] = nil
+            playermeta.descriptions[parentnamestring] = nil
+            playermeta.players[parentnamestring] = nil
+            playermeta.toggles[parentnamestring] = nil
+        end
+    end
+
+    local data = todo[parentnamestring]
+
+    if data.level < 5 then
+        for _, namestring in pairs(data.subtasks) do
+            remove_data(force, todo, namestring)
+
+            todo[namestring] = nil
         end
     end
 end
 
-local playerstart = function(player_index)
-    if 	not script_data.players[tostring(player_index)] then
-        local player = player_lib.new(game.players[player_index], script_data)
+import_subtasks = function(task, todo, importtask, importtasks, namestring)
+    local newlevel = task.level + 1
+    local newnamestringpart = namestring .. ",L" .. newlevel .. "="
+
+    for _, importnamestring in pairs(importtask.subtasks) do
+        local importdata = importtasks[importnamestring]
+        local newnamestring = newnamestringpart .. task.index
+
+        todo[newnamestring] = {
+            title = importdata.title or "",
+            description = importdata.description or "",
+            id_string = task.id_string,
+            parent_string = namestring,
+            state = importdata.state or false,
+            level = newlevel,
+            parentindex = #task.subtasks + 1,
+            index = (newlevel < 5 and 1) or nil,
+            assigned = {},
+            location = (type(importdata.location) == "table" and type(importdata.location.x) == "number" and type(importdata.location.y) == "number" and {x = importdata.location.x, y = importdata.location.y}) or {},
+            subtasks = (newlevel < 5 and {}) or nil
+        }
+
+        task.index = task.index + 1
+
+        table.insert(task.subtasks, newnamestring)
+
+        if newlevel < 5 and type(importdata.subtasks) == "table" and importdata.subtasks[1] then
+            import_subtasks(todo[newnamestring], todo, importdata, importtasks, newnamestring)
+        end
+    end
+end
+
+local function add_forces()
+    for _, force in pairs(game.forces) do
+        local id = tostring(force.index)
+
+        if not script_data.todo[id] then
+            script_data.todo[id] = {}
+            script_data.finished_todo[id] = {}
+            script_data.all_todo[id] = {}
+            script_data.unfinished_todo[id] = {}
+            script_data.player_table[id] = {}
+            script_data.player_lookup[id] = {}
+        end
+    end
+end
+
+local function playerstart(player_index)
+    if not script_data.players[tostring(player_index)] then
+        local player = player_lib.new(game.players[player_index], #script_data.unfinished_todo[tostring(game.players[player_index].force.index)])
+        local id = player.force
 
         script_data.players[player.index] = player
-        script_data.player_table[player.index] = player.player.name
-        script_data.player_lookup[player.player.name] = player.index
+        script_data.player_table[id][player.index] = player.player.name
+        script_data.player_lookup[id][player.player.name] = player.index
     end
 end
 
-local playerload = function()
+local function playerload()
     for _, player in pairs(game.players) do
         playerstart(player.index)
     end
 end
 
---Events
+return {
+    on_init = function()
+        global.NET = global.NET or script_data
 
-local on_gui_checked_state_changed = function(event)
-    local element = event.element
-    local name = element.name
+        add_forces()
+        playerload()
+    end,
+    on_load = function()
+        script_data = global.NET or script_data
+        for _, player in pairs(script_data.players) do
+            setmetatable(player, player_lib.metatable)
+        end
+    end,
+    on_configuration_changed = function(event)
+        global.NET = global.NET or script_data
 
-    if name:sub(1, 10) == "TODO_CHECK" then
-        local player_id = event.player_index
-        local player = game.players[player_id]
-        local playermeta = script_data.players[tostring(player_id)]
-        local state = element.state
-        local number = name:sub(11, 12)
-        local index = name:sub(14)
+        add_forces()
+        playerload()
 
-        if (number == "01" or number == "03") then
-            local data = script_data.todo[index]
+        local changes = event.mod_changes and event.mod_changes["Not_Enough_Todo"] or {}
 
-            if state then
-                data.state = true
+        if next(changes) then
+            local oldchanges = changes.old_version
 
-                for _, subdata in pairs(data.subtasks) do
-                    subdata.state = true
+            if oldchanges and changes.new_version then
+                if oldchanges == "0.0.2" then
+                    local old_script_data = global.script_data
+                    local todo = script_data.todo["1"]
+                    local finished_todo = script_data.finished_todo["1"]
+                    local all_todo = script_data.all_todo["1"]
+                    local unfinished_todo = script_data.unfinished_todo["1"]
+
+                    for _, playermeta in pairs(old_script_data.players) do
+                        playermeta.button.destroy()
+
+                        if playermeta.frame then
+                            playermeta.frame.destroy()
+                        end
+
+                        for _, frame in pairs(playermeta.reference_frames) do
+                            frame.destroy()
+                        end
+                    end
+
+                    for _, data in pairs(old_script_data.todo) do
+                        local newnamestring = "id=" .. script_data.index
+
+                        todo[newnamestring] = {
+                            title = data.title,
+                            description = data.description,
+                            id_string = newnamestring,
+                            state = data.state,
+                            level = 0,
+                            all_index = #all_todo + 1,
+                            finished_index = (data.state and #finished_todo + 1) or nil,
+                            unfinished_index = (not data.state and #unfinished_todo + 1) or nil,
+                            index = 1,
+                            assigned = {},
+                            location = data.location,
+                            subtasks = {}
+                        }
+
+                        script_data.index = script_data.index + 1
+
+                        table.insert(all_todo, newnamestring)
+
+                        if data.state then
+                            table.insert(finished_todo, newnamestring)
+                        else
+                            table.insert(unfinished_todo, newnamestring)
+                        end
+
+                        for _, subtaskdata in pairs(data.subtasks) do
+                            local newnamestring2 = newnamestring .. "L1=" .. todo[newnamestring].index
+
+                            todo[newnamestring2] = {
+                                title = subtaskdata.title,
+                                description = "",
+                                id_string = newnamestring,
+                                parent_string = newnamestring,
+                                state = subtaskdata.state,
+                                level = 1,
+                                parentindex = #todo[newnamestring].subtasks + 1,
+                                index = 1,
+                                assigned = {},
+                                location = subtaskdata.location,
+                                subtasks = {}
+                            }
+
+                            todo[newnamestring].index = todo[newnamestring].index + 1
+
+                            table.insert(todo[newnamestring].subtasks, newnamestring2)
+                        end
+                    end
+
+                    global.script_data = nil
                 end
-
-                for index_number, id2 in pairs(script_data.unfinished_todo) do
-                    if id2 == index then
-                        table.remove(script_data.unfinished_todo, index_number)
-                        table.insert(script_data.finished_todo, index)
-
-                        build_scrollpane_3()
-
-                        break
-                    end
-                end
-
-                for _, playermeta2 in pairs(script_data.players) do
-                    local maincheckbox = playermeta2.maincheckboxes and playermeta2.maincheckboxes[index]
-                    local reference_maincheckbox = playermeta2.reference_maincheckboxes[index]
-
-                    if maincheckbox then
-                        maincheckbox.state = true
-
-                        local subcheckboxes = playermeta2.subcheckboxes[index]
-                        
-                        for index_number, subdata in pairs(data.subtasks) do
-                            subcheckboxes[index_number].state = true
-                        end
-                    end
-
-                    if reference_maincheckbox then
-                        reference_maincheckbox.state = true
-
-                        local reference_subcheckboxes = playermeta2.reference_subcheckboxes[index]
-
-                        for index_number, subdata in pairs(data.subtasks) do
-                            reference_subcheckboxes[index_number].state = true
-                        end
-                    end
-                end
-            else
-                if player.admin then
-                    data.state = false
-
-                    for index_number, id2 in pairs(script_data.finished_todo) do
-                        if id2 == index then
-                            table.remove(script_data.finished_todo, index_number)
-                            table.insert(script_data.unfinished_todo, index)
-
-                            build_scrollpane_3()
-
-                            break
-                        end
-                    end
-
-                    for _, playermeta2 in pairs(script_data.players) do
-                        local maincheckbox = playermeta2.maincheckboxes and playermeta2.maincheckboxes[index]
-                        local reference_maincheckbox = playermeta2.reference_maincheckboxes[index]
-
-                        if maincheckbox then
-                            maincheckbox.state = false
-                        end
-
-                        if reference_maincheckbox then
-                            reference_maincheckbox.state = false
-                        end
-                    end
-                else
-                    element.state = true
-
-                    player.print({"Todo.NotAdminCheckbox"})
-                end
-            end
-        elseif (number == "02" or number == "04") then
-            local _, endnumber, id = name:find("_(%d+)_", 13)
-            local index_number = tonumber(name:sub(endnumber + 1))
-            local subtask = script_data.todo[id].subtasks[index_number]
-
-            if state then
-                subtask.state = true
-
-                for _, playermeta2 in pairs(script_data.players) do
-                    local subcheckboxes = playermeta2.subcheckboxes and playermeta2.subcheckboxes[id]
-                    local reference_subcheckboxes = playermeta2.reference_subcheckboxes and playermeta2.reference_subcheckboxes[id]
-
-                    if subcheckboxes and subcheckboxes[index_number] then
-                        subcheckboxes[index_number].state = true
-                    end
-
-                    if reference_subcheckboxes and reference_subcheckboxes[index_number] then
-                        reference_subcheckboxes[index_number].state = true
-                    end
-                end
-            else
-                if player.admin then
-                    subtask.state = false
-
-                    for _, playermeta2 in pairs(script_data.players) do
-                        local subcheckboxes = playermeta2.subcheckboxes and playermeta2.subcheckboxes[id]
-                        local reference_subcheckboxes = playermeta2.reference_subcheckboxes and playermeta2.reference_subcheckboxes[id]
-
-                        if subcheckboxes and subcheckboxes[index_number] then
-                            subcheckboxes[index_number].state = false
-                        end
-
-                        if reference_subcheckboxes and reference_subcheckboxes[index_number] then
-                            reference_subcheckboxes[index_number].state = false
-                        end
-                    end
-                else
-                    element.state = true
-
-                    player.print({"Todo.NotAdminCheckbox"})
-                end
-            end
-        elseif number == "05" then
-            playermeta = script_data.players[tostring(index)]
-            playermeta.settings.changed = true
-            playermeta.settings.add_tasks = state
-
-            if playermeta.frame then
-                playermeta:clear()
-                playermeta:gui()
-            end
-        elseif number == "06" then
-            playermeta = script_data.players[tostring(index)]
-            playermeta.settings.changed = true
-            playermeta.settings.delete_assigned_players = state
-
-            if playermeta.frame then
-                playermeta:clear()
-                playermeta:gui()
-            end
-        elseif number == "07" then
-            playermeta = script_data.players[tostring(index)]
-            playermeta.settings.changed = true
-            playermeta.settings.assign_players = state
-
-            if playermeta.frame then
-                playermeta:clear()
-                playermeta:gui()
-            end
-        elseif number == "08" then
-            playermeta = script_data.players[tostring(index)]
-            playermeta.settings.changed = true
-            playermeta.settings.sort_tasks = state
-
-            if playermeta.frame then
-                playermeta:clear()
-                playermeta:gui()
-            end
-        elseif number == "09" then
-            playermeta = script_data.players[tostring(index)]
-            playermeta.settings.changed = true
-            playermeta.settings.set_location = state
-
-            if playermeta.frame then
-                playermeta:clear()
-                playermeta:gui()
-            end
-        elseif number == "10" then
-            playermeta = script_data.players[tostring(index)]
-            playermeta.settings.changed = true
-            playermeta.settings.edit_tasks = state
-
-            if playermeta.frame then
-                playermeta:clear()
-                playermeta:gui()
-            end
-        elseif number == "11" then
-            playermeta = script_data.players[tostring(index)]
-            playermeta.settings.changed = true
-            playermeta.settings.delete_tasks = state
-
-            if playermeta.frame then
-                playermeta:clear()
-                playermeta:gui()
-            end
-        elseif number == "12" then
-            playermeta = script_data.players[tostring(index)]
-            playermeta.settings.changed = true
-            playermeta.settings.add_subtasks = state
-
-            if playermeta.frame then
-                playermeta:clear()
-                playermeta:gui()
             end
         end
-    end
-end
+    end,
+    events = {
+        [definesevents.on_force_created] = function(event)
+            local id = tostring(event.force.index)
 
-local on_gui_click = function(event)
-    local element = event.element
-    local name = element.name
+            script_data.todo[id] = {}
+            script_data.finished_todo[id] = {}
+            script_data.all_todo[id] = {}
+            script_data.unfinished_todo[id] = {}
+            script_data.player_table[id] = {}
+            script_data.player_lookup[id] = {}
+        end,
+        [definesevents.on_forces_merging] = function(event)
+            local oldid = tostring(event.source.index)
+            local newid = tostring(event.destination.index)
+            local todo = script_data.todo[newid]
+            local finished_todo = script_data.finished_todo[newid]
+            local all_todo = script_data.all_todo[newid]
+            local unfinished_todo = script_data.unfinished_todo[newid]
 
-    if name:sub(1, 10) == "TODO_CLICK" then
-        local player_id = event.player_index
-        local player = game.players[player_id]
-        local playermeta = script_data.players[tostring(player_id)]
-        local switch_state = playermeta.switch_state
-        local button = event.button
-        local number = name:sub(11, 12)
+            todo = util.merge({todo, script_data.todo[oldid]})
 
-        if number == "01" then
-            if playermeta.frame then
-                playermeta:clear()
-            else
-                playermeta:gui()
+            for _, namestring in pairs(script_data.finished_todo[oldid]) do
+                table.insert(finished_todo, namestring)
+
+                todo[namestring].finished_index = #finished_todo
             end
-        elseif number == "02" then
-            if playermeta.add_frame then
-                playermeta:clear_add()
-                element.style = "frame_action_button"
-            else
-                playermeta:add_gui()
-                element.style = "todoframeactionselected"
-            end
-        elseif number == "03" then
-            if playermeta.import_frame then
-                playermeta:clear_import()
-                element.style = "frame_action_button"
-            else
-                playermeta:import_gui()
-                element.style = "todoframeactionselected"
-            end
-        elseif number == "04" then
-            if playermeta.export_frame then
-                playermeta:clear_export()
-                element.style = "frame_action_button"
-            else
-                local todo = script_data.todo
-                local data = {}
 
-                if switch_state == "left" then
-                    local t = {}
+            for _, namestring in pairs(script_data.all_todo[oldid]) do
+                table.insert(all_todo, namestring)
 
-                    for _, id in pairs(script_data.finished_todo) do
-                        table.insert(t, todo[id])
+                todo[namestring].all_index = #all_todo
+            end
+
+            for _, namestring in pairs(script_data.unfinished_todo[oldid]) do
+                table.insert(unfinished_todo, namestring)
+
+                todo[namestring].unfinished_index = #unfinished_todo
+            end
+
+            update_scrollpane(newid, "all")
+
+            script_data.todo[oldid] = nil
+            script_data.finished_todo[oldid] = nil
+            script_data.all_todo[oldid] = nil
+            script_data.unfinished_todo[oldid] = nil
+            script_data.player_table[oldid] = nil
+            script_data.player_lookup[oldid] = nil
+        end,
+        [definesevents.on_gui_checked_state_changed] = function(event)
+            local element = event.element
+            local name = element.name
+
+            if name:sub(1, 10) == "TODO_CHECK" then
+                local player_id = event.player_index
+                local player_index = tostring(player_id)
+                local player = game.players[player_id]
+                local playermeta = script_data.players[player_index]
+                local force = playermeta.force
+                local state = element.state
+                local number = name:sub(11, 12)
+                local namestring = name:sub(14)
+                local todo = script_data.todo[force]
+
+                if number == "01" then
+                    local task = todo[namestring]
+
+                    if state then
+                        task.state = state
+
+                        table.remove(script_data.unfinished_todo[force], task.unfinished_index)
+                        table.insert(script_data.finished_todo[force], namestring)
+
+                        task.unfinished_index = nil
+                        task.finished_index = #script_data.finished_todo[force]
+
+                        for i, namestring2 in pairs(script_data.unfinished_todo[force]) do
+                            todo[namestring2].unfinished_index = i
+                        end
+
+                        update_scrollpane(force, "all")
+                        update_checkboxes(force, state, namestring)
+                    else
+                        if playermeta.unfinish_tasks or not game.is_multiplayer() then
+                            task.state = state
+
+                            table.remove(script_data.finished_todo[force], task.finished_index)
+                            table.insert(script_data.unfinished_todo[force], namestring)
+
+                            task.finished_index = nil
+                            task.unfinished_index = #script_data.unfinished_todo[force]
+
+                            for i, namestring2 in pairs(script_data.finished_todo[force]) do
+                                todo[namestring2].finished_index = i
+                            end
+
+                            update_scrollpane(force, "all")
+                            update_checkboxes(force, state, namestring)
+                        else
+                            player.print({"TodoRights.Unfinish"})
+
+                            element.state = not state
+                        end
+                    end
+                elseif number == "02" then
+                    local task = todo[namestring]
+
+                    if state then
+                        task.state = state
+
+                        update_checkboxes(force, state, namestring)
+                    else
+                        if playermeta.unfinish_tasks or not game.is_multiplayer() then
+                            task.state = state
+
+                            update_checkboxes(force, state, namestring)
+                        else
+                            player.print({"TodoRights.Unfinish"})
+
+                            element.state = not state
+                        end
+                    end
+                elseif number == "03" then
+                    local second_playermeta = script_data.players[namestring:match("%d+")]
+
+                    second_playermeta.settings.changed = true
+                    second_playermeta.settings[namestring:match("[%w_]+$")] = state
+
+                    second_playermeta:clear()
+                    second_playermeta:gui(script_data)
+                end
+            end
+        end,
+        [definesevents.on_gui_click] = function(event)
+            local element = event.element
+            local name = element.name
+
+            if name:sub(1, 10) == "TODO_CLICK" then
+                local player_index = event.player_index
+                local player_id = tostring(player_index)
+                local player = game.players[player_index]
+                local playermeta = script_data.players[player_id]
+                local force = playermeta.force
+                local switch_state = playermeta.switch_state
+                local button = event.button
+                local number = name:sub(11, 12)
+                local namestring = name:sub(14)
+                local todo = script_data.todo[force]
+
+                if number == "01" then
+                    if playermeta.frame then
+                        if playermeta.edit_mode then
+                            check_texts(force, playermeta)
+                        end
+
+                        playermeta:clear()
+                    else
+                        playermeta.button.number = #script_data.unfinished_todo[force]
+                        playermeta:gui(script_data)
+                    end
+                elseif number == "02" then
+                    playermeta.edit_mode = not playermeta.edit_mode
+                    playermeta.sort.visible = playermeta.edit_mode
+
+                    if playermeta.edit_mode then
+                        playermeta.edit_button.style = "todoframeactionselected"
+                    else
+                        check_texts(force, playermeta)
+
+                        playermeta.edit_button.style = "frame_action_button"
                     end
 
-                    data = {state = switch_state, data = t}
-                elseif switch_state == "none" then
-                    local t = {}
-
-                    for _, id in pairs(script_data.all_todo) do
-                        table.insert(t, todo[id])
+                    playermeta:build_scrollpane(script_data)
+                elseif number == "03" then
+                    if playermeta.import_frame then
+                        playermeta.import_button.style = "frame_action_button"
+                        playermeta:clear_import()
+                    else
+                        playermeta.import_button.style = "todoframeactionselected"
+                        playermeta:import_gui()
+                    end
+                elseif number == "04" then
+                    if playermeta.export_frame then
+                        playermeta.export_button.style = "frame_action_button"
+                        playermeta:clear_export()
+                    else
+                        playermeta.export_button.style = "todoframeactionselected"
+                        playermeta:export_gui(game.encode_string(game.table_to_json(todo)))
+                    end
+                elseif number == "05" then
+                    if playermeta.settings_frame then
+                        playermeta.settings_button.style = "frame_action_button"
+                        playermeta:clear_settings()
+                    else
+                        playermeta.settings_button.style = "todoframeactionselected"
+                        playermeta:settings_gui(script_data.player_table[force])
+                    end
+                elseif number == "06" then
+                    if playermeta.edit_mode then
+                        check_texts(force, playermeta)
                     end
 
-                    data = {state = switch_state, data = t}
-                elseif switch_state == "right" then
-                    local t = {}
+                    playermeta:clear()
+                elseif number == "07" then
+                    local newnamestring = remove_last(namestring)
+                    local data = todo[newnamestring]
 
-                    for _, id in pairs(script_data.unfinished_todo) do
-                        table.insert(t, todo[id])
+                    data.assigned[namestring:match("%d+$")] = nil
+
+                    update_player_flow(force, data.assigned, newnamestring)
+                elseif number == "08" then
+                    local data = todo[namestring]
+
+                    data.assigned[player_id] = player.name
+
+                    update_player_flow(force, data.assigned, namestring)
+                elseif number == "09" then
+                    local task = todo[namestring]
+
+                    if task.parent_string then
+                        local parenttask = todo[task.parent_string]
+
+                        table.remove(parenttask.subtasks, task.parentindex)
+
+                        if button == definesbutton.left then
+                            table.insert(parenttask.subtasks, task.parentindex - 1, namestring)
+                        else
+                            table.insert(parenttask.subtasks, 1, namestring)
+                        end
+
+                        for i, namestring2 in pairs(parenttask.subtasks) do
+                            todo[namestring2].parentindex = i
+                        end
+
+                        update_subtask_flow(force, parenttask.subtasks, task.parent_string)
+                    else
+                        local lookup = script_data.unfinished_todo[force]
+                        local change = "unfinished_index"
+
+                        if switch_state == "left" then
+                            lookup = script_data.finished_todo[force]
+                            change = "finished_index"
+                        elseif switch_state == "none" then
+                            lookup = script_data.all_todo[force]
+                            change = "all_index"
+                        end
+
+                        table.remove(lookup, task[change])
+
+                        if button == definesbutton.left then
+                            table.insert(lookup, task[change] - 1, namestring)
+                        else
+                            table.insert(lookup, 1, namestring)
+                        end
+
+                        for i, namestring2 in pairs(lookup) do
+                            todo[namestring2][change] = i
+                        end
+
+                        update_scrollpane(force, switch_state)
                     end
 
-                    data = {state = switch_state, data = t}
-                end
+                    update_references(force, task.id_string)
+                elseif number == "10" then
+                    local task = todo[namestring]
 
-                playermeta:export_gui(game.encode_string(game.table_to_json(data)))
-                element.style = "todoframeactionselected"
-            end
-        elseif number == "05" then
-            if playermeta.settings_frame then
-                playermeta:clear_settings()
-                element.style = "frame_action_button"
-            else
-                playermeta:settings_gui()
-                element.style = "todoframeactionselected"
-            end
-        elseif number == "06" then
-            playermeta:clear()
-        elseif number == "07" then
-            local _, endnumber, id = name:find("_(%d+)_", 13)
+                    if task.parent_string then
+                        local parenttask = todo[task.parent_string]
 
-            script_data.todo[id].assigned[name:sub(endnumber + 1)] = nil
+                        table.remove(parenttask.subtasks, task.parentindex)
 
-            build_scrollpane_2(switch_state)
-        elseif number == "08" then
-            script_data.todo[name:sub(14)].assigned[tostring(player_id)] = player.name
+                        if button == definesbutton.left then
+                            table.insert(parenttask.subtasks, task.parentindex + 1, namestring)
+                        else
+                            table.insert(parenttask.subtasks, namestring)
+                        end
 
-            build_scrollpane_2(switch_state)
-        elseif number == "09" then
-            local index = tonumber(name:sub(14))
-            local lookup = {}
+                        for i, namestring2 in pairs(parenttask.subtasks) do
+                            todo[namestring2].parentindex = i
+                        end
 
-            if switch_state == "left" then
-                lookup = script_data.finished_todo
-            elseif switch_state == "none" then
-                lookup = script_data.all_todo
-            elseif switch_state == "right" then
-                lookup = script_data.unfinished_todo
-            end
+                        update_subtask_flow(force, parenttask.subtasks, task.parent_string)
+                    else
+                        local lookup = script_data.unfinished_todo[force]
+                        local change = "unfinished_index"
 
-            local t = table_deepcopy(lookup[index])
-            table.remove(lookup, index)
+                        if switch_state == "left" then
+                            lookup = script_data.finished_todo[force]
+                            change = "finished_index"
+                        elseif switch_state == "none" then
+                            lookup = script_data.all_todo[force]
+                            change = "all_index"
+                        end
 
-            if button == definesbutton.left then
-                table.insert(lookup, index - 1, t)
-            elseif button == definesbutton.right then
-                table.insert(lookup, 1, t)
-            else
-                table.insert(lookup, index, t)
-            end
+                        table.remove(lookup, task[change])
 
-            build_scrollpane_1(switch_state)
-        elseif number == "10" then
-            local index = tonumber(name:sub(14))
-            local lookup = {}
+                        if button == definesbutton.left then
+                            table.insert(lookup, task[change] + 1, namestring)
+                        else
+                            table.insert(lookup, namestring)
+                        end
 
-            if switch_state == "left" then
-                lookup = script_data.finished_todo
-            elseif switch_state == "none" then
-                lookup = script_data.all_todo
-            elseif switch_state == "right" then
-                lookup = script_data.unfinished_todo
-            end
+                        for i, namestring2 in pairs(lookup) do
+                            todo[namestring2][change] = i
+                        end
 
-            local t = table_deepcopy(lookup[index])
-            table.remove(lookup, index)
-
-            if button == definesbutton.left then
-                table.insert(lookup, index + 1, t)
-            elseif button == definesbutton.right then
-                table.insert(lookup, t)
-            else
-                table.insert(lookup, index, t)
-            end
-
-            build_scrollpane_1(switch_state)
-        elseif number == "11" then
-            local id = name:sub(14)
-            local flow = playermeta.mastersubtaskflows[id]
-            local visible = flow.visible
-
-            if visible then
-                playermeta.togglebutton[id].sprite = "utility/speed_down"
-                flow.visible = false
-                playermeta.sub_open[id] = false
-            else
-                playermeta.togglebutton[id].sprite = "utility/speed_up"
-                flow.visible = true
-                playermeta.sub_open[id] = true
-            end
-        elseif (number == "12" or number == "29") then
-            local task = script_data.todo[name:sub(14)]
-
-            if button == definesbutton.left then
-                if next(task.location) then
-                    player.open_map(task.location)
-                else
-                    player.print({"Todo.NoLocation"})
-                end
-            elseif button == definesbutton.right then
-                if playermeta.settings.set_location then
-                    local position = player.position
-
-                    task.location = position
-                    player.force.add_chart_tag(player.surface, {position = position, text = task.title})
-                else
-                    player.print({"Todo.NoRights"})
-                end
-            end
-        elseif number == "13" then
-            local id = name:sub(14)
-
-            if playermeta.reference_frames[id] then
-                playermeta:clear_reference(id)
-            else
-                playermeta:reference_gui(id)
-            end
-        elseif number == "14" then
-            if playermeta.edit_frame then
-                playermeta:clear_edit()
-            else
-                playermeta:edit_gui(name:sub(14))
-            end
-        elseif number == "15" then
-            local _, endnumber, index = name:find("_(%d+)_", 13)
-            local id = name:sub(endnumber + 1)
-            local state = script_data.todo[id].state
-
-            if state then
-                table.remove(script_data.finished_todo, tonumber(index))
-                table.remove(script_data.all_todo, tonumber(index))
-            else
-                table.remove(script_data.all_todo, tonumber(index))
-                table.remove(script_data.unfinished_todo, tonumber(index))
-            end
-
-            script_data.todo[id] = nil
-
-            for _, playermeta2 in pairs(script_data.players) do
-                local reference_frame = playermeta2.reference_frames[id]
-
-                if reference_frame then
-                    playermeta:clear_reference(id)
-                end
-
-                playermeta2.sub_open[id] = nil
-            end
-
-            build_scrollpane_2(switch_state)
-        elseif number == "16" then
-            local _, endnumber, id = name:find("_(%d+)_", 13)
-            local _, endnumber2, index_number = name:find("_(%d+)_", endnumber)
-
-            script_data.todo[id].subtasks[tonumber(index_number)].assigned[name:sub(endnumber2 + 1)] = nil
-
-            build_scrollpane_2(switch_state)
-        elseif number == "17" then
-            local _, endnumber, id = name:find("_(%d+)_", 13)
-            script_data.todo[id].subtasks[tonumber(name:sub(endnumber + 1))].assigned[tostring(player_id)] = player.name
-
-            build_scrollpane_2(switch_state)
-        elseif number == "18" then
-            local _, endnumber, id = name:find("_(%d+)_", 13)
-            local index_number = tonumber(name:sub(endnumber + 1))
-            local subtasks = script_data.todo[id].subtasks
-
-            local t = table_deepcopy(subtasks[index_number])
-            table.remove(subtasks, index_number)
-
-            if button == definesbutton.left then
-                table.insert(subtasks, index_number - 1, t)
-            elseif button == definesbutton.right then
-                table.insert(subtasks, 1, t)
-            else
-                table.insert(subtasks, index_number, t)
-            end
-
-            build_scrollpane_2(switch_state)
-            build_reference(id)
-        elseif number == "19" then
-            local _, endnumber, id = name:find("_(%d+)_", 13)
-            local index_number = tonumber(name:sub(endnumber + 1))
-            local subtasks = script_data.todo[id].subtasks
-
-            local t = table_deepcopy(subtasks[index_number])
-            table.remove(subtasks, index_number)
-
-            if button == definesbutton.left then
-                table.insert(subtasks, index_number + 1, t)
-            elseif button == definesbutton.right then
-                table.insert(subtasks, t)
-            else
-                table.insert(subtasks, index_number, t)
-            end
-
-            build_scrollpane_2(switch_state)
-            build_reference(id)
-        elseif (number == "20" or number == "30") then
-            local _, endnumber, id = name:find("_(%d+)_", 13)
-            local subtask = script_data.todo[id].subtasks[tonumber(name:sub(endnumber + 1))]
-
-            if button == definesbutton.left then
-                if next(subtask.location) then
-                    player.open_map(subtask.location)
-                else
-                    player.print({"Todo.NoLocation"})
-                end
-            elseif button == definesbutton.right then
-                if playermeta.settings.set_location then
-                    local position = player.position
-
-                    subtask.location = position
-                    player.force.add_chart_tag(player.surface, {position = position, text = subtask.title})
-                else
-                    player.print({"Todo.NoRights"})
-                end
-            end
-        elseif number == "21" then
-            local _, endnumber, id = name:find("_(%d+)_", 13)
-
-            table.remove(script_data.todo[id].subtasks, tonumber(name:sub(endnumber + 1)))
-
-            build_scrollpane_2(switch_state)
-            build_reference(id)
-        elseif number == "22" then
-            playermeta:clear_add()
-            playermeta.add_button.style = "frame_action_button"
-        elseif number == "23" then
-            local text = playermeta.add_titletextfield.text
-
-            if #text > 0 then
-                local data = {
-                    title = text,
-                    description = playermeta.add_descriptiontextbox.text,
-                    state = false,
-                    assigned = {},
-                    location = {},
-                    subtasks = {}
-                }
-
-                local index = tostring(script_data.index)
-
-                script_data.todo[index] = data
-                script_data.index = script_data.index + 1
-
-                if playermeta.add_checkbox.state then
-                    table.insert(script_data.all_todo, 1, index)
-                    table.insert(script_data.unfinished_todo, 1, index)
-                else
-                    table.insert(script_data.all_todo, index)
-                    table.insert(script_data.unfinished_todo, index)
-                end
-
-                build_scrollpane_2("right")
-
-                playermeta:clear_add()
-                playermeta.add_button.style = "frame_action_button"
-            else
-                player.print({"Todo.NoTitle"})
-            end
-        elseif number == "24" then
-            playermeta:clear_import()
-            playermeta.import_button.style = "frame_action_button"
-        elseif number == "25" then
-        elseif number == "26" then
-            playermeta:clear_export()
-            playermeta.export_button.style = "frame_action_button"
-        elseif number == "27" then
-        elseif number == "28" then
-            playermeta:clear_reference(name:sub(14))
-        elseif number == "31" then
-            playermeta:clear_edit()
-        elseif number == "32" then
-            local text = playermeta.edit_titletextfield.text
-
-            if #text > 0 then
-                local edit_subtasktextfields = playermeta.edit_subtasktextfields
-                local boolean = true
-
-                for _, element2 in pairs(edit_subtasktextfields) do
-                    if #element2.text == 0 then
-                        boolean = false
-
-                        break
-                    end
-                end
-
-                if boolean then
-                    local id = name:sub(14)
-                    local data = script_data.todo[id]
-                    local description = playermeta.edit_descriptiontextbox.text
-
-                    data.title = text
-                    data.description = description
-
-                    for index, subdata in pairs(data.subtasks) do
-                        subdata.title = edit_subtasktextfields[index].text
+                        update_scrollpane(force, switch_state)
                     end
 
-                    for _, playermeta2 in pairs(script_data.players) do
-                        local reference_frame = playermeta2.reference_frames[id]
+                    update_references(force, task.id_string)
+                elseif number == "11" then
+                    playermeta.sub_open[namestring] = not playermeta.sub_open[namestring]
+                    playermeta.subtaskflows[namestring].visible = playermeta.sub_open[namestring]
 
-                        if reference_frame then
-                            playermeta2.reference_titles[id].caption = text
-                            playermeta2.reference_descriptions[id].caption = description
+                    if playermeta.sub_open[namestring] then
+                        playermeta.toggles[namestring].sprite = "utility/speed_up"
+                    else
+                        playermeta.toggles[namestring].sprite = "utility/speed_down"
+                    end
+                elseif number == "12" then
+                    local task = todo[namestring]
 
-                            local subtitles = playermeta2.reference_subtitles[id]
+                    if button == definesbutton.left then
+                        if next(task.location) then
+                            player.open_map(task.location, 1)
+                        else
+                            player.print({"TodoError.NoMapData"})
+                        end
+                    else
+                        if playermeta.settings.set_location or not game.is_multiplayer() then
+                            if #task.title > 0 then
+                                task.location = player.position
 
-                            for index, element2 in pairs(subtitles) do
-                                element2.caption = edit_subtasktextfields[index].text
+                                player.force.add_chart_tag(player.surface, {position = player.position, text = task.title})
+                            else
+                                player.print({"TodoError.NoTitle"})
+                            end
+                        else
+                            player.print({"TodoRights.SetLocation"})
+                        end
+                    end
+                elseif number == "13" then
+                    local id_string = namestring:match("^([%w_]+=%d+)")
+                    local task = todo[namestring]
+
+                    if playermeta.reference_frames[id_string] then
+                        if playermeta.reference_namestrings[id_string] == namestring then
+                            playermeta:clear_reference(id_string)
+                        else
+                            playermeta:reference_internal(task, todo, namestring)
+                        end
+                    else
+                        playermeta:reference_gui(todo, namestring)
+                    end
+                elseif number == "14" then
+                    local task = todo[namestring]
+
+                    remove_data(force, todo, namestring)
+
+                    todo[namestring] = nil
+
+                    if task.parent_string then
+                        local id_string = task.id_string
+                        local parenttask = todo[task.parent_string]
+
+                        table.remove(parenttask.subtasks, task.parentindex)
+
+                        for i, namestring2 in pairs(parenttask.subtasks) do
+                            todo[namestring2].parentindex = i
+                        end
+
+                        update_subtask_flow(force, parenttask.subtasks, task.parent_string)
+
+                        for _, player_id2 in pairs(script_data.player_lookup[force]) do
+                            local playermeta2 = script_data.players[player_id2]
+
+                            if playermeta2.reference_frames[id_string] then
+                                local namestring2 = playermeta2.reference_namestrings[id_string]
+
+                                if namestring2 == namestring then
+                                    playermeta2:clear_reference(id_string)
+                                else
+                                    playermeta2:reference_internal(todo[namestring2], todo, namestring2)
+                                end
+                            end
+                        end
+                    else
+                        table.remove(script_data.all_todo[force], task.all_index)
+
+                        for i, namestring2 in pairs(script_data.all_todo[force]) do
+                            todo[namestring2].all_index = i
+                        end
+
+                        if task.state then
+                            table.remove(script_data.finished_todo[force], task.finished_index)
+
+                            for i, namestring2 in pairs(script_data.finished_todo[force]) do
+                                todo[namestring2].finished_index = i
+                            end
+                        else
+                            table.remove(script_data.unfinished_todo[force], task.unfinished_index)
+
+                            for i, namestring2 in pairs(script_data.unfinished_todo[force]) do
+                                todo[namestring2].unfinished_index = i
+                            end
+                        end
+
+                        update_scrollpane(force, "none-" .. (task.state and "left" or "right"))
+
+                        for _, player_id2 in pairs(script_data.player_lookup[force]) do
+                            local playermeta2 = script_data.players[player_id2]
+
+                            if playermeta2.reference_frames[namestring] then
+                                playermeta2:clear_reference(namestring)
                             end
                         end
                     end
+                elseif number == "15" then
+                    if #namestring > 0 then
+                        local data = todo[namestring]
+                        local newlevel = data.level + 1
+                        local newnamestring = namestring .. ",L" .. newlevel .. "=" .. data.index
 
-                    build_scrollpane_2(switch_state)
-                else
-                    player.print({"Todo.NoTitleSubEdit"})
-                end
-            else
-                player.print({"Todo.NoTitleEdit"})
-            end
-        end
-    end
-end
+                        todo[newnamestring] = {
+                            title = "",
+                            description = "",
+                            id_string = data.id_string,
+                            parent_string = namestring,
+                            state = false,
+                            level = newlevel,
+                            parentindex = #data.subtasks + 1,
+                            index = (newlevel < 5 and 1) or nil,
+                            assigned = {},
+                            location = {},
+                            subtasks = (newlevel < 5 and {}) or nil
+                        }
 
-local on_gui_confirmed = function(event)
-    local element = event.element
-    local name = element.name
+                        data.index = data.index + 1
 
-    if name:sub(1, 14) == "TODO_CONFIRMED" then
-        local text = element.text
+                        table.insert(data.subtasks, newnamestring)
 
-        if #text > 0 then
-            local id = name:sub(18)
+                        update_subtask_flow(force, data.subtasks, namestring)
+                        update_references(force, data.id_string)
+                    else
+                        local newnamestring = "id=" .. script_data.index
 
-            table.insert(script_data.todo[id].subtasks, {
-                title = text,
-                state = false,
-                assigned = {},
-                location = {}
-            })
+                        todo[newnamestring] = {
+                            title = "",
+                            description = "",
+                            id_string = newnamestring,
+                            state = false,
+                            level = 0,
+                            all_index = #script_data.all_todo[force] + 1,
+                            unfinished_index = #script_data.unfinished_todo[force] + 1,
+                            index = 1,
+                            assigned = {},
+                            location = {},
+                            subtasks = {}
+                        }
 
-            build_scrollpane_2(script_data.players[tostring(event.player_index)].switch_state)
-            build_reference(id)
-        else
-            player.print({"NoTitle"})
-        end
-    end
-end
+                        script_data.index = script_data.index + 1
 
-local on_gui_location_changed = function(event)
-    local playermeta = script_data.players[tostring(event.player_index)]
-    local element = event.element
+                        table.insert(script_data.all_todo[force], newnamestring)
+                        table.insert(script_data.unfinished_todo[force], newnamestring)
 
-    if playermeta.frame and element.index == playermeta.frame.index then
-        playermeta.location = element.location
-    elseif playermeta.add_frame and element.index == playermeta.add_frame.index then
-        playermeta.addgui_location = element.location
-    elseif playermeta.edit_frame and element.index == playermeta.edit_frame.index then
-        playermeta.editgui_location = element.location
-    end
-end
+                        update_scrollpane(force, "none-right")
+                    end
+                elseif number == "16" then
+                    playermeta.import_button.style = "frame_action_button"
+                    playermeta:clear_import()
+                elseif number == "17" then
+                    if #playermeta.import_textbox.text > 0 then
+                        local tasks = game.json_to_table(game.decode_string(playermeta.import_textbox.text))
 
-local on_gui_selection_state_changed = function(event)
-    local element = event.element
-    local name = element.name
+                        if tasks and table_size(tasks) > 0 then
+                            local finished_todo = script_data.finished_todo[force]
+                            local all_todo = script_data.all_todo[force]
+                            local unfinished_todo = script_data.unfinished_todo[force]
 
-    if name:sub(1, 9) == "TODO_DROP" then
-        local player_id = event.player_index
-        local player = game.players[player_id]
-        local playermeta = script_data.players[tostring(player_id)]
-        local player_name = element.get_item(element.selected_index)
-        local player_index = script_data.player_lookup[player_name]
-        local switch_state = playermeta.switch_state
-        local number = name:sub(10, 11)
+                            for _, task in pairs(tasks) do
+                                if not task.parent_string then
+                                    local newnamestring = "id=" .. script_data.index
 
-        if number == "01" then
-            local assigned = script_data.todo[name:sub(13)].assigned
+                                    todo[newnamestring] = {
+                                        title = task.title or "",
+                                        description = task.description or "",
+                                        id_string = newnamestring,
+                                        state = task.state or false,
+                                        all_index = #all_todo + 1,
+                                        finished_index = (task.state and #finished_todo + 1) or nil,
+                                        unfinished_todo = (not task.state and #unfinished_todo + 1) or nil,
+                                        level = 0,
+                                        index = 1,
+                                        assigned = {},
+                                        location = (type(task.location) == "table" and type(task.location.x) == "number" and type(task.location.y) == "number" and {x = task.location.x, y = task.location.y}) or {},
+                                        subtasks = {}
+                                    }
 
-            if assigned[player_index] then
-                element.selected_index = 0
+                                    script_data.index = script_data.index + 1
 
-                player.print({"Todo.AlreadyAssigned"})
-            else
-                assigned[player_index] = player_name
+                                    table.insert(all_todo, newnamestring)
 
-                build_scrollpane_2(switch_state)
-            end
-        elseif number == "02" then
-            local _, endnumber, id = name:find("_(%d+)_", 12)
-            local assigned = script_data.todo[id].subtasks[tonumber(name:sub(endnumber + 1))].assigned
+                                    if todo[newnamestring].state then
+                                        table.insert(finished_todo, newnamestring)
+                                    else
+                                        table.insert(unfinished_todo, newnamestring)
+                                    end
 
-            if assigned[player_index] then
-                element.selected_index = 0
+                                    if type(task.subtasks) == "table" and task.subtasks[1] then
+                                        import_subtasks(todo[newnamestring], todo, task, tasks, newnamestring)
+                                    end
+                                end
+                            end
 
-                player.print({"Todo.AlreadyAssigned"})
-            else
-                assigned[player_index] = player_name
+                            playermeta.import_button.style = "frame_action_button"
+                            playermeta:clear_import()
 
-                build_scrollpane_2(switch_state)
-            end
-        elseif number == "03" then
-            if player_index ~= playermeta.index then
-                playermeta:settings_player_gui(player_index)
-            else
-                element.selected_index = 0
+                            update_scrollpane(force, "all")
+                        else
+                            player.print({"TodoError.NoImportTable"})
+                        end
+                    else
+                        player.print({"TodoError.NoImportText"})
+                    end
+                elseif number == "18" then
+                    playermeta.export_button.style = "frame_action_button"
+                    playermeta:clear_export()
+                elseif number == "19" then
+                    playermeta.export_textbox.focus()
+                    playermeta.export_textbox.select_all()
+                elseif number == "20" then
+                    playermeta:clear_reference(namestring)
+                elseif number == "21" then
+                    playermeta.reference_open[namestring] = not playermeta.reference_open[namestring]
+                    playermeta.reference_subtaskflows[namestring].visible = playermeta.reference_open[namestring]
 
-                player.print({"Todo.CantEdit"})
-            end
-        end
-    end
-end
-
-local on_gui_switch_state_changed = function(event)
-    local element = event.element
-    local name = element.name
-
-    if name:sub(1, 11) == "TODO_SWITCH" then
-        local playermeta = script_data.players[tostring(event.player_index)]
-        playermeta.switch_state = element.switch_state
-        playermeta:build_scrollpane()
-    end
-end
-
-local on_player_created = function(event)
-    playerstart(event.player_index)
-end
-
-local on_player_demoted = function(event)
-    local settings = script_data.players[tostring(event.player_index)].settings
-
-    if not settings.changed then
-        for setting, _ in pairs(settings) do
-            if setting ~= "changed" then
-                settings[setting] = false
-            end
-        end
-    end
-end
-
-local on_player_promoted = function(event)
-    local player = script_data.players[tostring(event.player_index)]
-
-    if player then
-        local settings = player.settings
-
-        if not settings.changed then
-            for setting, _ in pairs(settings) do
-                if setting ~= "changed" then
-                    settings[setting] = true
+                    if playermeta.reference_open[namestring] then
+                        playermeta.reference_toggles[namestring].sprite = "utility/speed_up"
+                    else
+                        playermeta.reference_toggles[namestring].sprite = "utility/speed_down"
+                    end
                 end
             end
+        end,
+        [definesevents.on_gui_location_changed] = function(event)
+            local playermeta = script_data.players[tostring(event.player_index)]
+            local element = event.element
+
+            if playermeta.frame and playermeta.frame.index == element.index then
+                playermeta.location = element.location
+            elseif playermeta.import_frame and playermeta.import_frame.index == element.index then
+                playermeta.import_location = element.location
+            elseif playermeta.export_frame and playermeta.export_frame.index == element.index then
+                playermeta.export_location = element.location
+            end
+        end,
+        [definesevents.on_gui_selection_state_changed] = function(event)
+            local element = event.element
+            local name = element.name
+
+            if name:sub(1, 9) == "TODO_DROP" then
+                local player_id = event.player_index
+                local player_index = tostring(player_id)
+                local player = game.players[player_id]
+                local playermeta = script_data.players[player_index]
+                local force = playermeta.force
+                local number = name:sub(10, 11)
+                local namestring = name:sub(13)
+                local player_name = element.get_item(element.selected_index)
+                local second_player_id = script_data.player_lookup[force][player_name]
+
+                if number == "01" then
+                    local task = script_data.todo[force][namestring]
+
+                    if task.assigned[second_player_id] then
+                        player.print({"TodoError.CantAssign"})
+                    else
+                        task.assigned[second_player_id] = player_name
+
+                        update_player_flow(force, task.assigned, namestring)
+                    end
+                elseif number == "02" then
+                    if second_player_id ~= player_index then
+                        playermeta:settings_player_gui(script_data.players[second_player_id].settings, second_player_id)
+                    else
+                        player.print({"TodoError.CantEditYourself"})
+
+                        element.selected_index = 0
+                    end
+                end
+            end
+        end,
+        [definesevents.on_gui_switch_state_changed] = function(event)
+            local element = event.element
+            local name = element.name
+
+            if name:sub(1, 11) == "TODO_SWITCH" then
+                local playermeta = script_data.players[tostring(event.player_index)]
+                local number = name:sub(12, 13)
+
+                if number == "01" then
+                    playermeta.switch_state = element.switch_state
+                    playermeta:build_scrollpane(script_data)
+                end
+            end
+        end,
+        [definesevents.on_gui_text_changed] = function(event)
+            local element = event.element
+            local name = element.name
+
+            if name:sub(1, 12) == "TODO_CHANGED" then
+                local playermeta = script_data.players[tostring(event.player_index)]
+                local number = name:sub(13, 14)
+                local namestring = name:sub(16)
+
+                if number == "01" then
+                    playermeta.edit_titles[namestring] = element.text
+                elseif number == "02" then
+                    playermeta.edit_descriptions[namestring] = element.text
+                end
+
+                element.style.font = "default-bold"
+                element.style.font_color  = {r = 75, g = 75, b = 75}
+            end
+        end,
+        [definesevents.on_player_changed_force] = function(event)
+            local player_id = tostring(event.player_index)
+            local player = game.players[event.player_index]
+            local playermeta = script_data.players[player_id]
+            local oldid = tostring(event.force.index)
+            local newid = tostring(player.force.index)
+
+            if script_data.todo[oldid] then
+                for namestring, task in pairs(script_data.todo[oldid]) do
+                    task.assigned[player_id] = nil
+
+                    update_player_flow(oldid, task.assigned, namestring)
+                end
+
+                script_data.player_table[oldid][player_id] = nil
+                script_data.player_lookup[oldid][player.name] = nil
+            end
+
+            script_data.player_table[newid][player_id] = player.name
+            script_data.player_lookup[newid][player.name] = player_id
+
+            if playermeta.frame then
+                playermeta:clear()
+
+                for id_string, _ in pairs(playermeta.reference_frames) do
+                    playermeta:clear_reference(id_string)
+                end
+            end
+
+            playermeta.sub_open = {}
+            playermeta.force = newid
+            playermeta.button.number = #script_data.unfinished_todo[newid]
+        end,
+        [definesevents.on_player_created] = function(event)
+            playerstart(event.player_index)
+        end,
+        [definesevents.on_player_demoted] = function(event)
+            local settings = script_data.players[tostring(event.player_index)].settings
+
+            if not settings.changed then
+                for setting, _ in pairs(settings) do
+                    if setting ~= "changed" then
+                        settings[setting] = false
+                    end
+                end
+            end
+        end,
+        [definesevents.on_player_promoted] = function(event)
+            local playermeta = script_data.players[tostring(event.player_index)]
+
+            if playermeta then
+                local settings = playermeta.settings
+
+                if not settings.changed then
+                    for setting, _ in pairs(settings) do
+                        if setting ~= "changed" then
+                            settings[setting] = true
+                        end
+                    end
+                end
+            end
+        end,
+        [definesevents.on_pre_player_removed] = function(event)
+            local player_index = event.player_index
+            local player_id = tostring(player_index)
+            local player = game.players[player_index]
+            local force = tostring(game.players[player_index].force.index)
+
+            for namestring, task in pairs(script_data.todo[force]) do
+                task.assigned[player_id] = nil
+
+                update_player_flow(force, task.assigned, namestring)
+            end
+
+            script_data.player_table[force][player_id] = nil
+            script_data.player_lookup[force][player.name] = nil
+            script_data.players[player_id] = nil
         end
-    end
-end
-
-local on_player_removed = function(event)
-    local player_id = event.player_index
-
-    script_data.players[tostring(player_id)] = nil
-    script_data.player_table[tostring(player_id)] = nil
-    script_data.player_lookup[game.players[player_id].name] = nil
-end
-
-local lib = {}
-
-lib.events = {
-    [definesevents.on_gui_checked_state_changed] = on_gui_checked_state_changed,
-    [definesevents.on_gui_click] = on_gui_click,
-    [definesevents.on_gui_confirmed] = on_gui_confirmed,
-    [definesevents.on_gui_location_changed] = on_gui_location_changed,
-    [definesevents.on_gui_selection_state_changed] = on_gui_selection_state_changed,
-    [definesevents.on_gui_switch_state_changed] = on_gui_switch_state_changed,
-    [definesevents.on_player_created] = on_player_created,
-    [definesevents.on_player_demoted] = on_player_demoted,
-    [definesevents.on_player_promoted] = on_player_promoted,
-    [definesevents.on_player_removed] = on_player_removed
+    }
 }
-
-lib.on_init = function()
-    global.script_data = global.script_data or script_data
-
-    playerload()
-end
-
-lib.on_load = function()
-	script_data = global.script_data or script_data
-
-	for _, player in pairs(script_data.players) do
-		setmetatable(player, player_lib.metatable)
-    end
-end
-
-lib.on_configuration_changed = function()
-    global.script_data = global.script_data or script_data
-
-    playerload()
-end
-
-return lib

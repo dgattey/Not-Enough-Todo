@@ -1,8 +1,14 @@
 # Not-Enough-Todo
 
-Hey Guys,
+This modification is a new and improved todolist.
 
-this modification adds a new and improved Todo-List to the game. It will help you manage your base building much better!
+## Features
+ - Force support
+ - Multiple levels of subtasks
+ - Multiplayer and Singleplayer optimized
+ - Nice and fancy gui
+
+### Credits to Firerazer for finding alot of bugs!
 
 I have a [Discord](https://discord.gg/rVpjuh4) for discussion, etc.
 If you want you can support me on [Patreon](https://www.patreon.com/LuziferSenpai).

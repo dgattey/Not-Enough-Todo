@@ -1,4 +1,17 @@
 ---------------------------------------------------------------------------------------------------
+Version: 1.0.0
+Date: 22.11.2020
+  Changes:
+    - Changed the full GUI
+    - Changed the background system
+  Features:
+    - Added 4 more sublevels
+    - Added a better edit gui
+    - Added a better way to add tasks and subtasks
+    - Added force support
+  Bugfixes:
+    - Fixed alot of bugs, that had todo with the old saving system
+---------------------------------------------------------------------------------------------------
 Version: 0.0.2
 Date: 07.08.2020
   Bugfixes:

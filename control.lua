@@ -2,4 +2,4 @@ if script.active_mods["debugadapter"] then require('__debugadapter__/debugadapte
 
 local handler = require "event_handler"
 
-handler.add_lib( require "scripts/events" )
+handler.add_lib(require "scripts/events")

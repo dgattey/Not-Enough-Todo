@@ -1,5 +1,5 @@
-local s = data.raw["gui-style"].default
 local MODNAME = "__Not_Enough_Todo__"
+local s = data.raw["gui-style"].default
 
 --Flows
 s["todoverticalflow"] = {
@@ -8,63 +8,70 @@ s["todoverticalflow"] = {
     vertical_spacing = 0
 }
 
-s["todoverticalflowspacing"] = {
-    type = "vertical_flow_style",
-    padding = 0
-}
-
 s["todohorizontalflow"] = {
     type = "horizontal_flow_style",
     padding = 0,
     horizontal_spacing = 0
 }
 
-s["todomainflow"] = {
+s["todoswitchflow"] = {
     type = "horizontal_flow_style",
-    vertical_align = "center",
-    horizontal_spacing = 10,
-    padding = 0,
-    top_padding = 10,
-    right_padding = 8,
-    left_padding = 8
+    parent = "todohorizontalflow",
+    width = 100,
+    horizontal_align = "center"
+}
+
+s["todotaskflow"] = {
+    type = "vertical_flow_style",
+    parent = "todoverticalflow",
+    padding = 8
+}
+
+s["todohorizontalflow8top"] = {
+    type = "horizontal_flow_style",
+    parent = "todohorizontalflow",
+    top_padding = 8
 }
 
 s["todocheckboxflow"] = {
     type = "horizontal_flow_style",
-    vertical_align = "center",
-    horizontal_align = "center",
-    padding = 0,
-    width = 88
+    parent = "todohorizontalflow",
+    width = 30,
+    top_padding = 4
 }
 
-s["todosecondflow"] = {
-    type = "horizontal_flow_style",
-    vertical_align = "center",
-    horizontal_spacing = 10,
-    padding = 0,
-    top_padding = 10
+s["todoverticalflow8right"] = {
+    type = "vertical_flow_style",
+    parent = "todoverticalflow",
+    right_padding = 8
 }
 
-s["todoflow5align"] = {
+s["todohorizonalflow8right2spacing"] = {
     type = "horizontal_flow_style",
-    vertical_align = "center",
-    horizontal_spacing = 5,
-    padding = 0
-}
-
-s["todoflow5"] = {
-    type = "horizontal_flow_style",
-    padding = 0,
-    horizontal_spacing = 5
-}
-
-s["todoaddflow"] = {
-    type = "horizontal_flow_style",
-    padding = 0,
-    top_padding = 10,
+    parent = "todohorizontalflow",
     right_padding = 8,
+    horizontal_spacing = 2
+}
+
+s["todohorizonalflow8left2spacing"] = {
+    type = "horizontal_flow_style",
+    parent = "todohorizontalflow",
     left_padding = 8,
-    horizontal_spacing = 10
+    horizontal_spacing = 2
+}
+
+s["todohorizonalflow2spacing"] = {
+    type = "horizontal_flow_style",
+    parent = "todohorizontalflow",
+    horizontal_spacing = 2
+}
+
+s["todosettingsflow"] = {
+    type = "horizontal_flow_style",
+    parent = "todohorizontalflow",
+    top_padding = 4,
+    right_padding = 8,
+    left_padding = 8
 }
 
 --Widgets
@@ -90,9 +97,8 @@ s["todoplaceholderwidget"] = {
 --Scrollpanes
 s["todoscrollpane"] = {
     type = "scroll_pane_style",
-    vertically_stretchable = "on",
+    minimal_height = 100,
     horizontal_scroll_policy = "off",
-    minimal_height = 600,
     vertical_flow_style = {
         type = "vertical_flow_style",
         parent = "todoverticalflow"
@@ -101,12 +107,12 @@ s["todoscrollpane"] = {
 
 s["todoreferencescrollpane"] = {
     type = "scroll_pane_style",
-    vertically_stretchable = "on",
     horizontal_scroll_policy = "off",
-    maximal_height = 300,
     vertical_flow_style = {
         type = "vertical_flow_style",
-        parent = "todoverticalflow"
+        parent = "todoverticalflow",
+        left_padding = 4,
+        right_padding = 4
     }
 }
 
@@ -134,17 +140,15 @@ s["todoframeactionselected"] = {
     }
 }
 
---Labels
-s["todomainlabel"] = {
-    type = "label_style",
-    width = 250,
-    single_line = false
+s["todoassignedbutton"] = {
+    type = "button_style",
+    width = 150
 }
 
-s["todosubtasklabel"] = {
+--Labels
+s["todotasklabel"] = {
     type = "label_style",
-    width = 231,
-    single_line = false
+    width = 400
 }
 
 s["todoassignedlabel"] = {
@@ -152,82 +156,93 @@ s["todoassignedlabel"] = {
     width = 150
 }
 
-s["todoassignedlabelclickable"] = {
+s["todosortlabel"] = {
+    type = "label_style",
+    width = (28 * 2) + 2
+}
+
+s["todotasklabeldata"] = {
+    type = "label_style",
+    width = 250
+}
+
+s["todotaskdescription"] = {
+    type = "label_style",
+    width = 250,
+    single_line = false
+}
+
+s["tododescriptionlabel"] = {
+    type = "label_style",
+    width = 200,
+    single_line = false
+}
+
+s["todoassignedlabeldata"] = {
+    type = "label_style",
+    width = 150
+}
+
+s["todoassignedlabelclickabledata"] = {
     type = "label_style",
     parent = "clickable_label",
     width = 150
 }
 
-s["todosortlabel"] = {
-    type = "label_style",
-    width = (28 * 2) + 5
+--Tables
+s["todomaintable"] = {
+    type = "table_style",
+    vertical_line_color = {r = 255, g = 255, b = 255},
+    horizontal_line_color =  {r = 255, g = 255, b = 255}
 }
 
-s["todooptionslabel"] = {
-    type = "label_style",
-    width = (28 * 5) + (4 * 5) - 10
+--Textfields/Boxes
+s["todotasktextfield"] = {
+    type = "textbox_style",
+    width = 250,
+    height = 28
 }
 
-s["todoaddlabel"] = {
-    type = "label_style",
-    width = 100
+s["todotasktextbox"] = {
+    type = "textbox_style",
+    width = 250,
+    height = 56
 }
 
-s["todoreferencetitle"] = {
-    type = "label_style",
-    parent = "subheader_caption_label",
-    width = 311
-}
-
-s["todoreferencedescriptionlabel"] = {
-    type = "label_style",
-    width = 283,
-    single_line = false
+--Dropdowns
+s["todoassigneddropdown"] = {
+    type = "dropdown_style",
+    width = 150
 }
 
 --Lines
-s["todoline"] = {
+s["todotaskline"] = {
     type = "line_style",
-    top_padding = 10
-}
-
---Textboxs
-s["todoaddtitletextfield"] = {
-    type = "textbox_style",
-    padding = 0,
-    width = 250
-}
-
-s["todoadddescriptiontextbox"] = {
-    type = "textbox_style",
-    padding = 0,
-    width = 250,
-    height = 100
+    horizontally_stretchable = "on",
+    top_padding = 4
 }
 
 --Frames
 s["todosubheaderframe"] = {
     type = "frame_style",
-    parent = "frame",
-    left_padding = 0,
-    right_padding = 0,
-    horizontal_flow_style = {
-        type = "horizontal_flow_style",
-        parent = "todomainflow",
-        horizontally_stretchable = "on",
-        top_padding = 0
-    }
-}
-
-s["todorefenrecesubheaderframe"] = {
-    type = "frame_style",
-    parent = "frame",
-    left_padding = 0,
-    right_padding = 0,
+    parent = "subheader_frame",
     horizontal_flow_style = {
         type = "horizontal_flow_style",
         vertical_align = "center",
-        parent = "todoaddflow"
+        horizontal_spacing = 8,
+        horizontally_stretchable = "on"
+    }
+}
+
+s["todoreferencesubheader"] = {
+    type = "frame_style",
+    parent = "subheader_frame",
+    horizontal_flow_style = {
+        type = "horizontal_flow_style",
+        left_padding = 4,
+        right_padding = 4,
+        vertical_align = "center",
+        horizontally_stretchable = "on"
     }
 }
 
@@ -236,63 +251,81 @@ data:extend{
         type = "sprite",
         name = "todo",
         filename = MODNAME .. "/graphics/todo.png",
-        width = 64,
-        height = 64,
+        flags = {"gui-icon"},
+        size = 64,
         scale = 1
     },
     {
         type = "sprite",
-        name = "todo-finished",
-        filename = MODNAME .. "/graphics/finished.png",
-        width = 64,
-        height = 64,
+        name = "todo-edit",
+        filename = MODNAME .. "/graphics/edit.png",
+        flags = {"gui-icon"},
+        size = 64,
         scale = 1
     },
     {
         type = "sprite",
-        name = "todo-unfinished",
-        filename = MODNAME .. "/graphics/unfinished.png",
-        width = 64,
-        height = 64,
-        scale = 1
-    },
-    {
-        type = "sprite",
-        name = "todo-up",
-        filename = MODNAME .. "/graphics/up.png",
-        width = 64,
-        height = 64,
-        scale = 1
-    },
-    {
-        type = "sprite",
-        name = "todo-down",
-        filename = MODNAME .. "/graphics/down.png",
-        width = 64,
-        height = 64,
-        scale = 1
-    },
-    {
-        type = "sprite",
-        name = "todo-add",
-        filename = MODNAME .. "/graphics/add.png",
-        width = 64,
-        height = 64,
-        scale = 1
-    },
-    {
-        type = "sprite",
-        name = "todo-clipboard",
-        filename = MODNAME .. "/graphics/tool-icons.png",
-        position = {0, 32},
+        name = "todo-import",
+        filename = MODNAME .. "/graphics/import.png",
+        flags = {"gui-icon"},
         size = 32,
+        scale = 0.5,
+        mipmap_count = 2
+    },
+    {
+        type = "sprite",
+        name = "todo-export",
+        filename = MODNAME .. "/graphics/export.png",
+        flags = {"gui-icon"},
+        size = 32,
+        scale = 0.5,
         mipmap_count = 2
     },
     {
         type = "sprite",
         name = "todo-settings",
         filename = MODNAME .. "/graphics/frame-action-icons.png",
+        flags = {"gui-icon"},
         position = {32, 96},
         size = 32
+    },
+    {
+        type = "sprite",
+        name = "todo-finished",
+        filename = MODNAME .. "/graphics/finished.png",
+        size = 64,
+        scale = 1
+    },
+    {
+        type = "sprite",
+        name = "todo-unfinished",
+        filename = MODNAME .. "/graphics/unfinished.png",
+        size = 64,
+        scale = 1
+    },
+    {
+        type = "sprite",
+        name = "todo-up",
+        filename = MODNAME .. "/graphics/up.png",
+        flags = {"gui-icon"},
+        size = 64,
+        scale = 1
+    },
+    {
+        type = "sprite",
+        name = "todo-down",
+        filename = MODNAME .. "/graphics/down.png",
+        flags = {"gui-icon"},
+        size = 64,
+        scale = 1
+    },
+    {
+        type = "sprite",
+        name = "todo-clipboard",
+        filename = MODNAME .. "/graphics/tool-icons.png",
+        flags = {"gui-icon"},
+        position = {0, 32},
+        size = 32,
+        mipmap_count = 2
     }
 }
