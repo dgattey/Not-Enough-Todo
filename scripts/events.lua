@@ -451,7 +451,10 @@ return {
                     second_playermeta.settings.changed = true
                     second_playermeta.settings[namestring:match("[%w_]+$")] = state
 
-                    second_playermeta:clear()
+                    if second_playermeta.frame then
+                        second_playermeta:clear()
+                    end
+
                     second_playermeta:gui(script_data)
                 end
             end
