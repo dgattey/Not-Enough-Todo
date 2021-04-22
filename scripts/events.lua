@@ -562,6 +562,7 @@ return {
 
                         update_subtask_flow(force, parenttask.subtasks, task.parent_string)
                     else
+                        check_texts(force, playermeta)
                         local lookup = script_data.unfinished_todo[force]
                         local change = "unfinished_index"
 
@@ -609,6 +610,7 @@ return {
 
                         update_subtask_flow(force, parenttask.subtasks, task.parent_string)
                     else
+                        check_texts(force, playermeta)
                         local lookup = script_data.unfinished_todo[force]
                         local change = "unfinished_index"
 
