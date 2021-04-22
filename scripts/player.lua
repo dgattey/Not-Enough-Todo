@@ -121,8 +121,8 @@ function player_data:build_scrollpane(script_data)
     self.descriptions = {}
     self.players = {}
     self.toggles = {}
-    self.edit_titles = {}
-    self.edit_descriptions = {}
+    self.edit_titles = self.edit_titles or {}
+    self.edit_descriptions = self.edit_descriptions or {}
 
     for i, namestring in pairs(lookup) do
         self:add_task(script_data.todo[force], script_data.player_table[force], namestring, task_amount, i)
