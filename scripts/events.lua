@@ -972,7 +972,8 @@ return {
             script_data.player_table[newid][player_id] = player.name
             script_data.player_lookup[newid][player.name] = player_id
 
-            if playermeta.frame then
+            -- If any windows are open (main one or specific tasks), clear both them and their references
+            if playermeta.frame or not (next(playermeta.reference_frames) == nil) then
                 playermeta:clear()
 
                 for id_string, _ in pairs(playermeta.reference_frames) do
