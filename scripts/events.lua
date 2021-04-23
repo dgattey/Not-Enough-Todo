@@ -11,7 +11,6 @@ local script_data = {
     index = 1,
     todo = {},
     finished_todo = {},
-    all_todo = {},
     unfinished_todo = {}
 }
 
@@ -199,7 +198,6 @@ local function add_forces()
         if not script_data.todo[id] then
             script_data.todo[id] = {}
             script_data.finished_todo[id] = {}
-            script_data.all_todo[id] = {}
             script_data.unfinished_todo[id] = {}
             script_data.player_table[id] = {}
             script_data.player_lookup[id] = {}
@@ -253,7 +251,6 @@ return {
                     local old_script_data = global.script_data
                     local todo = script_data.todo["1"]
                     local finished_todo = script_data.finished_todo["1"]
-                    local all_todo = script_data.all_todo["1"]
                     local unfinished_todo = script_data.unfinished_todo["1"]
 
                     for _, playermeta in pairs(old_script_data.players) do
@@ -277,7 +274,6 @@ return {
                             id_string = newnamestring,
                             state = data.state,
                             level = 0,
-                            all_index = #all_todo + 1,
                             finished_index = (data.state and #finished_todo + 1) or nil,
                             unfinished_index = (not data.state and #unfinished_todo + 1) or nil,
                             index = 1,
@@ -287,8 +283,6 @@ return {
                         }
 
                         script_data.index = script_data.index + 1
-
-                        table.insert(all_todo, newnamestring)
 
                         if data.state then
                             table.insert(finished_todo, newnamestring)
@@ -330,7 +324,6 @@ return {
 
             script_data.todo[id] = {}
             script_data.finished_todo[id] = {}
-            script_data.all_todo[id] = {}
             script_data.unfinished_todo[id] = {}
             script_data.player_table[id] = {}
             script_data.player_lookup[id] = {}
@@ -340,7 +333,6 @@ return {
             local newid = tostring(event.destination.index)
             local todo = script_data.todo[newid]
             local finished_todo = script_data.finished_todo[newid]
-            local all_todo = script_data.all_todo[newid]
             local unfinished_todo = script_data.unfinished_todo[newid]
 
             todo = util.merge({todo, script_data.todo[oldid]})
@@ -349,12 +341,6 @@ return {
                 table.insert(finished_todo, namestring)
 
                 todo[namestring].finished_index = #finished_todo
-            end
-
-            for _, namestring in pairs(script_data.all_todo[oldid]) do
-                table.insert(all_todo, namestring)
-
-                todo[namestring].all_index = #all_todo
             end
 
             for _, namestring in pairs(script_data.unfinished_todo[oldid]) do
@@ -367,7 +353,6 @@ return {
 
             script_data.todo[oldid] = nil
             script_data.finished_todo[oldid] = nil
-            script_data.all_todo[oldid] = nil
             script_data.unfinished_todo[oldid] = nil
             script_data.player_table[oldid] = nil
             script_data.player_lookup[oldid] = nil
@@ -565,17 +550,14 @@ return {
                         local lookup = script_data.unfinished_todo[force]
                         local change = "unfinished_index"
 
-                        if switch_state == "left" then
+                        if switch_state == "left" or (switch_state == "none" and task.finished_index) then
                             lookup = script_data.finished_todo[force]
                             change = "finished_index"
-                        elseif switch_state == "none" then
-                            lookup = script_data.all_todo[force]
-                            change = "all_index"
                         end
 
                         table.remove(lookup, task[change])
 
-                        if button == definesbutton.left then
+                        if button == definesbutton.left and task[change] - 1 > 1 then
                             table.insert(lookup, task[change] - 1, namestring)
                         else
                             table.insert(lookup, 1, namestring)
@@ -612,17 +594,14 @@ return {
                         local lookup = script_data.unfinished_todo[force]
                         local change = "unfinished_index"
 
-                        if switch_state == "left" then
+                        if switch_state == "left" or (switch_state == "none" and task.finished_index) then
                             lookup = script_data.finished_todo[force]
                             change = "finished_index"
-                        elseif switch_state == "none" then
-                            lookup = script_data.all_todo[force]
-                            change = "all_index"
                         end
 
                         table.remove(lookup, task[change])
 
-                        if button == definesbutton.left then
+                        if button == definesbutton.left and task[change] + 1 < #table then
                             table.insert(lookup, task[change] + 1, namestring)
                         else
                             table.insert(lookup, namestring)
@@ -713,12 +692,6 @@ return {
                             end
                         end
                     else
-                        table.remove(script_data.all_todo[force], task.all_index)
-
-                        for i, namestring2 in pairs(script_data.all_todo[force]) do
-                            todo[namestring2].all_index = i
-                        end
-
                         if task.state then
                             table.remove(script_data.finished_todo[force], task.finished_index)
 
@@ -778,7 +751,6 @@ return {
                             id_string = newnamestring,
                             state = false,
                             level = 0,
-                            all_index = #script_data.all_todo[force] + 1,
                             unfinished_index = #script_data.unfinished_todo[force] + 1,
                             index = 1,
                             assigned = {},
@@ -787,8 +759,6 @@ return {
                         }
 
                         script_data.index = script_data.index + 1
-
-                        table.insert(script_data.all_todo[force], newnamestring)
                         table.insert(script_data.unfinished_todo[force], newnamestring)
 
                         update_scrollpane(force, "none-right")
@@ -802,7 +772,6 @@ return {
 
                         if tasks and table_size(tasks) > 0 then
                             local finished_todo = script_data.finished_todo[force]
-                            local all_todo = script_data.all_todo[force]
                             local unfinished_todo = script_data.unfinished_todo[force]
 
                             for _, task in pairs(tasks) do
@@ -814,7 +783,6 @@ return {
                                         description = task.description or "",
                                         id_string = newnamestring,
                                         state = task.state or false,
-                                        all_index = #all_todo + 1,
                                         finished_index = (task.state and #finished_todo + 1) or nil,
                                         unfinished_todo = (not task.state and #unfinished_todo + 1) or nil,
                                         level = 0,
@@ -825,8 +793,6 @@ return {
                                     }
 
                                     script_data.index = script_data.index + 1
-
-                                    table.insert(all_todo, newnamestring)
 
                                     if todo[newnamestring].state then
                                         table.insert(finished_todo, newnamestring)
