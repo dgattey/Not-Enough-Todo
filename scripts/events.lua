@@ -1,6 +1,7 @@
 require "util"
 
 local player_lib = require "scripts/player"
+local event_ids = require "scripts/event_identifiers"
 local definesevents = defines.events
 local definesbutton = defines.mouse_button_type
 
@@ -387,7 +388,7 @@ return {
                 local namestring = name:sub(14)
                 local todo = script_data.todo[force]
 
-                if number == "01" then
+                if number == event_ids.ToggleCompleteWhileEditing then
                     local task = todo[namestring]
 
                     if state then
@@ -427,7 +428,7 @@ return {
                             element.state = not state
                         end
                     end
-                elseif number == "02" then
+                elseif number == event_ids.ToggleComplete then
                     local task = todo[namestring]
 
                     if state then
@@ -445,7 +446,7 @@ return {
                             element.state = not state
                         end
                     end
-                elseif number == "03" then
+                elseif number == event_ids.AssignUser then
                     local second_playermeta = script_data.players[namestring:match("%d+")]
 
                     second_playermeta.settings.changed = true
@@ -475,7 +476,7 @@ return {
                 local namestring = name:sub(14)
                 local todo = script_data.todo[force]
 
-                if number == "01" then
+                if number == event_ids.OpenMainWindow then
                     if playermeta.frame then
                         if playermeta.edit_mode then
                             check_texts(force, playermeta)
@@ -486,7 +487,7 @@ return {
                         playermeta.button.number = #script_data.unfinished_todo[force]
                         playermeta:gui(script_data)
                     end
-                elseif number == "02" then
+                elseif number == event_ids.ToggleEditMode then
                     playermeta.edit_mode = not playermeta.edit_mode
                     playermeta.sort.visible = playermeta.edit_mode
 
@@ -499,7 +500,7 @@ return {
                     end
 
                     playermeta:build_scrollpane(script_data)
-                elseif number == "03" then
+                elseif number == event_ids.ToggleImport then
                     if playermeta.import_frame then
                         playermeta.import_button.style = "frame_action_button"
                         playermeta:clear_import()
@@ -507,7 +508,7 @@ return {
                         playermeta.import_button.style = "todoframeactionselected"
                         playermeta:import_gui()
                     end
-                elseif number == "04" then
+                elseif number == event_ids.ToggleExport then
                     if playermeta.export_frame then
                         playermeta.export_button.style = "frame_action_button"
                         playermeta:clear_export()
@@ -515,7 +516,7 @@ return {
                         playermeta.export_button.style = "todoframeactionselected"
                         playermeta:export_gui(game.encode_string(game.table_to_json(todo)))
                     end
-                elseif number == "05" then
+                elseif number == event_ids.ToggleSettings then
                     if playermeta.settings_frame then
                         playermeta.settings_button.style = "frame_action_button"
                         playermeta:clear_settings()
@@ -523,26 +524,26 @@ return {
                         playermeta.settings_button.style = "todoframeactionselected"
                         playermeta:settings_gui(script_data.player_table[force])
                     end
-                elseif number == "06" then
+                elseif number == event_ids.CloseMainWindow then
                     if playermeta.edit_mode then
                         check_texts(force, playermeta)
                     end
 
                     playermeta:clear()
-                elseif number == "07" then
+                elseif number == event_ids.DeletePlayer then
                     local newnamestring = remove_last(namestring)
                     local data = todo[newnamestring]
 
                     data.assigned[namestring:match("%d+$")] = nil
 
                     update_player_flow(force, data.assigned, newnamestring)
-                elseif number == "08" then
+                elseif number == event_ids.AssignMe then
                     local data = todo[namestring]
 
                     data.assigned[player_id] = player.name
 
                     update_player_flow(force, data.assigned, namestring)
-                elseif number == "09" then
+                elseif number == event_ids.SortUp then
                     local task = todo[namestring]
 
                     if task.parent_string then
@@ -589,7 +590,7 @@ return {
                     end
 
                     update_references(force, task.id_string)
-                elseif number == "10" then
+                elseif number == event_ids.SortDown then
                     local task = todo[namestring]
 
                     if task.parent_string then
@@ -636,7 +637,7 @@ return {
                     end
 
                     update_references(force, task.id_string)
-                elseif number == "11" then
+                elseif number == event_ids.ToggleSubtasks then
                     playermeta.sub_open[namestring] = not playermeta.sub_open[namestring]
                     playermeta.subtaskflows[namestring].visible = playermeta.sub_open[namestring]
 
@@ -645,7 +646,7 @@ return {
                     else
                         playermeta.toggles[namestring].sprite = "utility/speed_down"
                     end
-                elseif number == "12" then
+                elseif number == event_ids.InteractWithMap then
                     local task = todo[namestring]
 
                     if button == definesbutton.left then
@@ -667,7 +668,7 @@ return {
                             player.print({"TodoRights.SetLocation"})
                         end
                     end
-                elseif number == "13" then
+                elseif number == event_ids.ToggleReference then
                     local id_string = namestring:match("^([%w_]+=%d+)")
                     local task = todo[namestring]
 
@@ -680,7 +681,7 @@ return {
                     else
                         playermeta:reference_gui(todo, namestring)
                     end
-                elseif number == "14" then
+                elseif number == event_ids.DeleteTask then
                     local task = todo[namestring]
 
                     remove_data(force, todo, namestring)
@@ -743,7 +744,7 @@ return {
                             end
                         end
                     end
-                elseif number == "15" then
+                elseif number == event_ids.AddTask then
                     if #namestring > 0 then
                         local data = todo[namestring]
                         local newlevel = data.level + 1
@@ -793,10 +794,10 @@ return {
 
                         update_scrollpane(force, "none-right")
                     end
-                elseif number == "16" then
+                elseif number == event_ids.CloseImportWindow then
                     playermeta.import_button.style = "frame_action_button"
                     playermeta:clear_import()
-                elseif number == "17" then
+                elseif number == event_ids.ImportTasks then
                     if #playermeta.import_textbox.text > 0 then
                         local tasks = game.json_to_table(game.decode_string(playermeta.import_textbox.text))
 
@@ -850,15 +851,15 @@ return {
                     else
                         player.print({"TodoError.NoImportText"})
                     end
-                elseif number == "18" then
+                elseif number == event_ids.CloseExportWindow then
                     playermeta.export_button.style = "frame_action_button"
                     playermeta:clear_export()
-                elseif number == "19" then
+                elseif number == event_ids.SelectAll then
                     playermeta.export_textbox.focus()
                     playermeta.export_textbox.select_all()
-                elseif number == "20" then
+                elseif number == event_ids.CloseReferenceWindow then
                     playermeta:clear_reference(namestring)
-                elseif number == "21" then
+                elseif number == event_ids.ToggleSubtaskReference then
                     playermeta.reference_open[namestring] = not playermeta.reference_open[namestring]
                     playermeta.reference_subtaskflows[namestring].visible = playermeta.reference_open[namestring]
 
@@ -897,7 +898,7 @@ return {
                 local player_name = element.get_item(element.selected_index)
                 local second_player_id = script_data.player_lookup[force][player_name]
 
-                if number == "01" then
+                if number == event_ids.ChooseAssignee then
                     local task = script_data.todo[force][namestring]
 
                     if task.assigned[second_player_id] then
@@ -907,7 +908,7 @@ return {
 
                         update_player_flow(force, task.assigned, namestring)
                     end
-                elseif number == "02" then
+                elseif number == event_ids.PickPlayer then
                     if second_player_id ~= player_index then
                         playermeta:settings_player_gui(script_data.players[second_player_id].settings, second_player_id)
                     else
@@ -926,7 +927,7 @@ return {
                 local playermeta = script_data.players[tostring(event.player_index)]
                 local number = name:sub(12, 13)
 
-                if number == "01" then
+                if number == event_ids.ToggleTaskTypes then
                     playermeta.switch_state = element.switch_state
                     playermeta:build_scrollpane(script_data)
                 end
@@ -941,9 +942,9 @@ return {
                 local number = name:sub(13, 14)
                 local namestring = name:sub(16)
 
-                if number == "01" then
+                if number == event_ids.ChangeTitle then
                     playermeta.edit_titles[namestring] = element.text
-                elseif number == "02" then
+                elseif number == event_ids.ChangeDescription then
                     playermeta.edit_descriptions[namestring] = element.text
                 end
 
