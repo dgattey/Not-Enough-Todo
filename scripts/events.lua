@@ -381,6 +381,7 @@ return {
                 local player_index = tostring(player_id)
                 local player = game.players[player_id]
                 local playermeta = script_data.players[player_index]
+                local settings = playermeta.settings
                 local force = playermeta.force
                 local state = element.state
                 local number = name:sub(11, 12)
@@ -406,7 +407,7 @@ return {
                         update_scrollpane(force, "all")
                         update_checkboxes(force, state, namestring)
                     else
-                        if playermeta.unfinish_tasks or not game.is_multiplayer() then
+                        if settings.unfinish_tasks or not game.is_multiplayer() then
                             task.state = state
 
                             table.remove(script_data.finished_todo[force], task.finished_index)
@@ -435,7 +436,7 @@ return {
 
                         update_checkboxes(force, state, namestring)
                     else
-                        if playermeta.unfinish_tasks or not game.is_multiplayer() then
+                        if settings.unfinish_tasks or not game.is_multiplayer() then
                             task.state = state
 
                             update_checkboxes(force, state, namestring)
@@ -468,6 +469,7 @@ return {
                 local player_id = tostring(player_index)
                 local player = game.players[player_index]
                 local playermeta = script_data.players[player_id]
+                local settings = playermeta.settings
                 local force = playermeta.force
                 local switch_state = playermeta.switch_state
                 local button = event.button
@@ -655,7 +657,7 @@ return {
                             player.print({"TodoError.NoMapData"})
                         end
                     else
-                        if playermeta.settings.set_location or not game.is_multiplayer() then
+                        if settings.set_location or not game.is_multiplayer() then
                             if #task.title > 0 then
                                 task.location = player.position
 
