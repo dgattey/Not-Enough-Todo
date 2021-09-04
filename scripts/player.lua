@@ -111,7 +111,7 @@ function player_data:build_scrollpane(script_data)
     local switch_state = self.switch_state
     local table = self.table
     local force = self.force
-    local lookup = (switch_state == "left" and script_data.finished_todo[force]) or (switch_state == "none" and script_data.all_todo[force]) or script_data.unfinished_todo[force]
+    local lookup = (switch_state == "left" and script_data.finished_todo[force]) or (switch_state == "none" and all_todo(script_data, force)) or script_data.unfinished_todo[force]
     local task_amount = #lookup
 
     table.clear()
