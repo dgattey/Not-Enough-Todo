@@ -499,7 +499,7 @@ function player_data:reference_subtasks(subtasks, todo, flow)
 end
 
 function player_data:clear()
-    self.frame.destroy()
+    if self.frame then self.frame.destroy() end
     self.frame = nil
     self.edit_button = nil
     self.import_button = nil
