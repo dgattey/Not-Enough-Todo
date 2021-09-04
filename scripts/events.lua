@@ -71,7 +71,9 @@ local function update_checkboxes(force, state, namestring)
     end
 end
 
-local function check_texts(force, playermeta)
+-- Don't clear the edit title/descriptions if we want to keep editing after this check
+local function check_texts(force, playermeta, keep_editing)
+    keep_editing = keep_editing or false
     local todo = script_data.todo[force]
     local player_lookup = script_data.player_lookup[force]
     local enddata = {}
@@ -80,8 +82,10 @@ local function check_texts(force, playermeta)
     for namestring, title in pairs(playermeta.titles) do
         local description = playermeta.descriptions[namestring]
 
-        playermeta.edit_titles[namestring] = nil
-        playermeta.edit_descriptions[namestring] = nil
+        if not keep_editing then
+            playermeta.edit_titles[namestring] = nil
+            playermeta.edit_descriptions[namestring] = nil
+        end
 
         if title.style.font == "default-bold" or description.style.font == "default-bold" then
             local data = todo[namestring]
@@ -576,6 +580,7 @@ return {
                             change = "all_index"
                         end
 
+                        check_texts(force, playermeta, true)
                         table.remove(lookup, task[change])
 
                         if button == definesbutton.left then
@@ -623,6 +628,7 @@ return {
                             change = "all_index"
                         end
 
+                        check_texts(force, playermeta, true)
                         table.remove(lookup, task[change])
 
                         if button == definesbutton.left then
