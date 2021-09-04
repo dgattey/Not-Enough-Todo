@@ -1,6 +1,7 @@
 require "util"
 
 local player_lib = require "scripts/player"
+local event_ids = require "scripts/event_identifiers"
 local definesevents = defines.events
 local definesbutton = defines.mouse_button_type
 
@@ -11,7 +12,6 @@ local script_data = {
     index = 1,
     todo = {},
     finished_todo = {},
-    all_todo = {},
     unfinished_todo = {}
 }
 
@@ -70,7 +70,9 @@ local function update_checkboxes(force, state, namestring)
     end
 end
 
-local function check_texts(force, playermeta)
+-- Don't clear the edit title/descriptions if we want to keep editing after this check
+local function check_texts(force, playermeta, keep_editing)
+    keep_editing = keep_editing or false
     local todo = script_data.todo[force]
     local player_lookup = script_data.player_lookup[force]
     local enddata = {}
@@ -79,8 +81,10 @@ local function check_texts(force, playermeta)
     for namestring, title in pairs(playermeta.titles) do
         local description = playermeta.descriptions[namestring]
 
-        playermeta.edit_titles[namestring] = nil
-        playermeta.edit_descriptions[namestring] = nil
+        if not keep_editing then
+            playermeta.edit_titles[namestring] = nil
+            playermeta.edit_descriptions[namestring] = nil
+        end
 
         if title.style.font == "default-bold" or description.style.font == "default-bold" then
             local data = todo[namestring]
@@ -199,7 +203,6 @@ local function add_forces()
         if not script_data.todo[id] then
             script_data.todo[id] = {}
             script_data.finished_todo[id] = {}
-            script_data.all_todo[id] = {}
             script_data.unfinished_todo[id] = {}
             script_data.player_table[id] = {}
             script_data.player_lookup[id] = {}
@@ -253,7 +256,6 @@ return {
                     local old_script_data = global.script_data
                     local todo = script_data.todo["1"]
                     local finished_todo = script_data.finished_todo["1"]
-                    local all_todo = script_data.all_todo["1"]
                     local unfinished_todo = script_data.unfinished_todo["1"]
 
                     for _, playermeta in pairs(old_script_data.players) do
@@ -277,7 +279,6 @@ return {
                             id_string = newnamestring,
                             state = data.state,
                             level = 0,
-                            all_index = #all_todo + 1,
                             finished_index = (data.state and #finished_todo + 1) or nil,
                             unfinished_index = (not data.state and #unfinished_todo + 1) or nil,
                             index = 1,
@@ -287,8 +288,6 @@ return {
                         }
 
                         script_data.index = script_data.index + 1
-
-                        table.insert(all_todo, newnamestring)
 
                         if data.state then
                             table.insert(finished_todo, newnamestring)
@@ -330,7 +329,6 @@ return {
 
             script_data.todo[id] = {}
             script_data.finished_todo[id] = {}
-            script_data.all_todo[id] = {}
             script_data.unfinished_todo[id] = {}
             script_data.player_table[id] = {}
             script_data.player_lookup[id] = {}
@@ -340,7 +338,6 @@ return {
             local newid = tostring(event.destination.index)
             local todo = script_data.todo[newid]
             local finished_todo = script_data.finished_todo[newid]
-            local all_todo = script_data.all_todo[newid]
             local unfinished_todo = script_data.unfinished_todo[newid]
 
             todo = util.merge({todo, script_data.todo[oldid]})
@@ -349,12 +346,6 @@ return {
                 table.insert(finished_todo, namestring)
 
                 todo[namestring].finished_index = #finished_todo
-            end
-
-            for _, namestring in pairs(script_data.all_todo[oldid]) do
-                table.insert(all_todo, namestring)
-
-                todo[namestring].all_index = #all_todo
             end
 
             for _, namestring in pairs(script_data.unfinished_todo[oldid]) do
@@ -367,7 +358,6 @@ return {
 
             script_data.todo[oldid] = nil
             script_data.finished_todo[oldid] = nil
-            script_data.all_todo[oldid] = nil
             script_data.unfinished_todo[oldid] = nil
             script_data.player_table[oldid] = nil
             script_data.player_lookup[oldid] = nil
@@ -388,7 +378,7 @@ return {
                 local namestring = name:sub(14)
                 local todo = script_data.todo[force]
 
-                if number == "01" then
+                if number == event_ids.ToggleCompleteWhileEditing then
                     local task = todo[namestring]
 
                     if state then
@@ -428,7 +418,7 @@ return {
                             element.state = not state
                         end
                     end
-                elseif number == "02" then
+                elseif number == event_ids.ToggleComplete then
                     local task = todo[namestring]
 
                     if state then
@@ -446,7 +436,7 @@ return {
                             element.state = not state
                         end
                     end
-                elseif number == "03" then
+                elseif number == event_ids.AssignUser then
                     local second_playermeta = script_data.players[namestring:match("%d+")]
 
                     second_playermeta.settings.changed = true
@@ -477,7 +467,7 @@ return {
                 local namestring = name:sub(14)
                 local todo = script_data.todo[force]
 
-                if number == "01" then
+                if number == event_ids.OpenMainWindow then
                     if playermeta.frame then
                         if playermeta.edit_mode then
                             check_texts(force, playermeta)
@@ -488,7 +478,7 @@ return {
                         playermeta.button.number = #script_data.unfinished_todo[force]
                         playermeta:gui(script_data)
                     end
-                elseif number == "02" then
+                elseif number == event_ids.ToggleEditMode then
                     playermeta.edit_mode = not playermeta.edit_mode
                     playermeta.sort.visible = playermeta.edit_mode
 
@@ -501,7 +491,7 @@ return {
                     end
 
                     playermeta:build_scrollpane(script_data)
-                elseif number == "03" then
+                elseif number == event_ids.ToggleImport then
                     if playermeta.import_frame then
                         playermeta.import_button.style = "frame_action_button"
                         playermeta:clear_import()
@@ -509,7 +499,7 @@ return {
                         playermeta.import_button.style = "todoframeactionselected"
                         playermeta:import_gui()
                     end
-                elseif number == "04" then
+                elseif number == event_ids.ToggleExport then
                     if playermeta.export_frame then
                         playermeta.export_button.style = "frame_action_button"
                         playermeta:clear_export()
@@ -517,7 +507,7 @@ return {
                         playermeta.export_button.style = "todoframeactionselected"
                         playermeta:export_gui(game.encode_string(game.table_to_json(todo)))
                     end
-                elseif number == "05" then
+                elseif number == event_ids.ToggleSettings then
                     if playermeta.settings_frame then
                         playermeta.settings_button.style = "frame_action_button"
                         playermeta:clear_settings()
@@ -525,26 +515,26 @@ return {
                         playermeta.settings_button.style = "todoframeactionselected"
                         playermeta:settings_gui(script_data.player_table[force])
                     end
-                elseif number == "06" then
+                elseif number == event_ids.CloseMainWindow then
                     if playermeta.edit_mode then
                         check_texts(force, playermeta)
                     end
 
                     playermeta:clear()
-                elseif number == "07" then
+                elseif number == event_ids.DeletePlayer then
                     local newnamestring = remove_last(namestring)
                     local data = todo[newnamestring]
 
                     data.assigned[namestring:match("%d+$")] = nil
 
                     update_player_flow(force, data.assigned, newnamestring)
-                elseif number == "08" then
+                elseif number == event_ids.AssignMe then
                     local data = todo[namestring]
 
                     data.assigned[player_id] = player.name
 
                     update_player_flow(force, data.assigned, namestring)
-                elseif number == "09" then
+                elseif number == event_ids.SortUp then
                     local task = todo[namestring]
 
                     if task.parent_string then
@@ -567,17 +557,15 @@ return {
                         local lookup = script_data.unfinished_todo[force]
                         local change = "unfinished_index"
 
-                        if switch_state == "left" then
+                        if switch_state == "left" or (switch_state == "none" and task.finished_index) then
                             lookup = script_data.finished_todo[force]
                             change = "finished_index"
-                        elseif switch_state == "none" then
-                            lookup = script_data.all_todo[force]
-                            change = "all_index"
                         end
 
+                        check_texts(force, playermeta, true)
                         table.remove(lookup, task[change])
 
-                        if button == definesbutton.left then
+                        if button == definesbutton.left and task[change] - 1 > 1 then
                             table.insert(lookup, task[change] - 1, namestring)
                         else
                             table.insert(lookup, 1, namestring)
@@ -591,7 +579,7 @@ return {
                     end
 
                     update_references(force, task.id_string)
-                elseif number == "10" then
+                elseif number == event_ids.SortDown then
                     local task = todo[namestring]
 
                     if task.parent_string then
@@ -614,17 +602,15 @@ return {
                         local lookup = script_data.unfinished_todo[force]
                         local change = "unfinished_index"
 
-                        if switch_state == "left" then
+                        if switch_state == "left" or (switch_state == "none" and task.finished_index) then
                             lookup = script_data.finished_todo[force]
                             change = "finished_index"
-                        elseif switch_state == "none" then
-                            lookup = script_data.all_todo[force]
-                            change = "all_index"
                         end
 
+                        check_texts(force, playermeta, true)
                         table.remove(lookup, task[change])
 
-                        if button == definesbutton.left then
+                        if button == definesbutton.left and task[change] + 1 < #table then
                             table.insert(lookup, task[change] + 1, namestring)
                         else
                             table.insert(lookup, namestring)
@@ -638,7 +624,7 @@ return {
                     end
 
                     update_references(force, task.id_string)
-                elseif number == "11" then
+                elseif number == event_ids.ToggleSubtasks then
                     playermeta.sub_open[namestring] = not playermeta.sub_open[namestring]
                     playermeta.subtaskflows[namestring].visible = playermeta.sub_open[namestring]
 
@@ -647,7 +633,7 @@ return {
                     else
                         playermeta.toggles[namestring].sprite = "utility/speed_down"
                     end
-                elseif number == "12" then
+                elseif number == event_ids.InteractWithMap then
                     local task = todo[namestring]
 
                     if button == definesbutton.left then
@@ -669,7 +655,7 @@ return {
                             player.print({"TodoRights.SetLocation"})
                         end
                     end
-                elseif number == "13" then
+                elseif number == event_ids.ToggleReference then
                     local id_string = namestring:match("^([%w_]+=%d+)")
                     local task = todo[namestring]
 
@@ -682,7 +668,7 @@ return {
                     else
                         playermeta:reference_gui(todo, namestring)
                     end
-                elseif number == "14" then
+                elseif number == event_ids.DeleteTask then
                     local task = todo[namestring]
 
                     remove_data(force, todo, namestring)
@@ -715,12 +701,6 @@ return {
                             end
                         end
                     else
-                        table.remove(script_data.all_todo[force], task.all_index)
-
-                        for i, namestring2 in pairs(script_data.all_todo[force]) do
-                            todo[namestring2].all_index = i
-                        end
-
                         if task.state then
                             table.remove(script_data.finished_todo[force], task.finished_index)
 
@@ -745,7 +725,7 @@ return {
                             end
                         end
                     end
-                elseif number == "15" then
+                elseif number == event_ids.AddTask then
                     if #namestring > 0 then
                         local data = todo[namestring]
                         local newlevel = data.level + 1
@@ -780,7 +760,6 @@ return {
                             id_string = newnamestring,
                             state = false,
                             level = 0,
-                            all_index = #script_data.all_todo[force] + 1,
                             unfinished_index = #script_data.unfinished_todo[force] + 1,
                             index = 1,
                             assigned = {},
@@ -789,22 +768,19 @@ return {
                         }
 
                         script_data.index = script_data.index + 1
-
-                        table.insert(script_data.all_todo[force], newnamestring)
                         table.insert(script_data.unfinished_todo[force], newnamestring)
 
                         update_scrollpane(force, "none-right")
                     end
-                elseif number == "16" then
+                elseif number == event_ids.CloseImportWindow then
                     playermeta.import_button.style = "frame_action_button"
                     playermeta:clear_import()
-                elseif number == "17" then
+                elseif number == event_ids.ImportTasks then
                     if #playermeta.import_textbox.text > 0 then
                         local tasks = game.json_to_table(game.decode_string(playermeta.import_textbox.text))
 
                         if tasks and table_size(tasks) > 0 then
                             local finished_todo = script_data.finished_todo[force]
-                            local all_todo = script_data.all_todo[force]
                             local unfinished_todo = script_data.unfinished_todo[force]
 
                             for _, task in pairs(tasks) do
@@ -816,7 +792,6 @@ return {
                                         description = task.description or "",
                                         id_string = newnamestring,
                                         state = task.state or false,
-                                        all_index = #all_todo + 1,
                                         finished_index = (task.state and #finished_todo + 1) or nil,
                                         unfinished_todo = (not task.state and #unfinished_todo + 1) or nil,
                                         level = 0,
@@ -827,8 +802,6 @@ return {
                                     }
 
                                     script_data.index = script_data.index + 1
-
-                                    table.insert(all_todo, newnamestring)
 
                                     if todo[newnamestring].state then
                                         table.insert(finished_todo, newnamestring)
@@ -852,15 +825,15 @@ return {
                     else
                         player.print({"TodoError.NoImportText"})
                     end
-                elseif number == "18" then
+                elseif number == event_ids.CloseExportWindow then
                     playermeta.export_button.style = "frame_action_button"
                     playermeta:clear_export()
-                elseif number == "19" then
+                elseif number == event_ids.SelectAll then
                     playermeta.export_textbox.focus()
                     playermeta.export_textbox.select_all()
-                elseif number == "20" then
+                elseif number == event_ids.CloseReferenceWindow then
                     playermeta:clear_reference(namestring)
-                elseif number == "21" then
+                elseif number == event_ids.ToggleSubtaskReference then
                     playermeta.reference_open[namestring] = not playermeta.reference_open[namestring]
                     playermeta.reference_subtaskflows[namestring].visible = playermeta.reference_open[namestring]
 
@@ -899,7 +872,7 @@ return {
                 local player_name = element.get_item(element.selected_index)
                 local second_player_id = script_data.player_lookup[force][player_name]
 
-                if number == "01" then
+                if number == event_ids.ChooseAssignee then
                     local task = script_data.todo[force][namestring]
 
                     if task.assigned[second_player_id] then
@@ -909,7 +882,7 @@ return {
 
                         update_player_flow(force, task.assigned, namestring)
                     end
-                elseif number == "02" then
+                elseif number == event_ids.PickPlayer then
                     if second_player_id ~= player_index then
                         playermeta:settings_player_gui(script_data.players[second_player_id].settings, second_player_id)
                     else
@@ -928,7 +901,7 @@ return {
                 local playermeta = script_data.players[tostring(event.player_index)]
                 local number = name:sub(12, 13)
 
-                if number == "01" then
+                if number == event_ids.ToggleTaskTypes then
                     playermeta.switch_state = element.switch_state
                     playermeta:build_scrollpane(script_data)
                 end
@@ -943,9 +916,9 @@ return {
                 local number = name:sub(13, 14)
                 local namestring = name:sub(16)
 
-                if number == "01" then
+                if number == event_ids.ChangeTitle then
                     playermeta.edit_titles[namestring] = element.text
-                elseif number == "02" then
+                elseif number == event_ids.ChangeDescription then
                     playermeta.edit_descriptions[namestring] = element.text
                 end
 
@@ -974,7 +947,8 @@ return {
             script_data.player_table[newid][player_id] = player.name
             script_data.player_lookup[newid][player.name] = player_id
 
-            if playermeta.frame then
+            -- If any windows are open (main one or specific tasks), clear both them and their references
+            if playermeta.frame or not (next(playermeta.reference_frames) == nil) then
                 playermeta:clear()
 
                 for id_string, _ in pairs(playermeta.reference_frames) do
